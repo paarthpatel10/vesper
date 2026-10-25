@@ -1,0 +1,6 @@
+# Optional: the core tools (make_reel.py, trend_agent.py, subtitle_engine.py) use only the standard library.
+# These power autopilot.py's smart steps; each step falls back gracefully if its package is missing.
+faster-whisper>=1.0      # auto word-by-word subtitles
+scenedetect>=0.6         # automatic clip cutting
+opencv-python>=4.8       # video decoding for scenedetect + face tracking
+mediapipe>=0.10          # optional; 1.x dropped the legacy face API, so reframe.py uses OpenCV Haar cascades there

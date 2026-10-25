@@ -1,0 +1,37 @@
+# --- Secrets
+.env
+
+# --- Python
+.venv/
+__pycache__/
+*.pyc
+
+# --- Runtime data (created by the pipeline; personal and often copyrighted)
+inbox/
+review/
+approved/
+rejected/
+logs/
+output/
+
+# --- Footage and renders: never commit copyrighted video
+assets/footage/
+*.mp4
+*.mkv
+*.mov
+*.webm
+*.m4v
+*.part
+
+# --- Fonts we may not redistribute (the code falls back without it)
+assets/fonts/arial.ttf
+
+# --- Local agent tooling (vendored plugin with its own git history)
+.agents/
+
+# --- OS / editor clutter
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
