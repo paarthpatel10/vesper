@@ -363,7 +363,7 @@ class Handler(BaseHTTPRequestHandler):
             if parts == ["api", "run"]:
                 body = self.read_body_json()
                 args = ["--no-briefing", "--drafts", str(int(body.get("drafts", 3))),
-                        "--max-len", str(float(body.get("max_len", 118)))]
+                        "--max-len", str(float(body.get("max_len", 60)))]
                 if not inbox_items():
                     return self.send_error_json(400, "The inbox is empty. Add a video first.")
                 return self.send_json(JOBS.start("process", args, "Making drafts from the inbox"))

@@ -294,7 +294,7 @@ def restyle_draft(work, style=None):
 
 
 def process_clip(video_path, day, use_cut=True, use_track=True, use_subs=True, whisper_model="small",
-                 max_len=118.0, drafts=3):
+                 max_len=60.0, drafts=3):
     """Turns one inbox clip into one or more drafts (top story beats for long sources like episodes)."""
     from framefluence.scene_cut import probe_duration
 
@@ -329,7 +329,8 @@ def main():
     parser.add_argument("--no-subs", action="store_true", help="Skip auto-subtitles")
     parser.add_argument("--no-briefing", action="store_true", help="Skip writing the daily trend briefing")
     parser.add_argument("--whisper-model", default="small", help="faster-whisper model (tiny/base/small/medium)")
-    parser.add_argument("--max-len", type=float, default=118.0, help="Longest reel in seconds (Reels cap: under 2 min)")
+    parser.add_argument("--max-len", type=float, default=60.0,
+                        help="Longest reel in seconds (default 60: rights holders often block longer excerpts)")
     parser.add_argument("--drafts", type=int, default=3, help="Drafts per long source (top-ranked story beats)")
     parser.add_argument("--restyle", nargs="+", metavar="DRAFT", help="Re-render review/ drafts with current styling")
     parser.add_argument("--style", choices=["bold", "clean"], help="Caption style for --restyle (default: draft's own)")
