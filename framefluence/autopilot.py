@@ -56,11 +56,14 @@ def probe_size(video_path):
 
 
 def load_clip_meta(video_path):
+    from framefluence.look import load_defaults
+
     sidecar = os.path.splitext(video_path)[0] + ".json"
-    meta = {}
+    # New drafts start from the user's saved look; a clip.json can still override any of it
+    meta = load_defaults()
     if os.path.exists(sidecar):
         with open(sidecar, encoding="utf-8") as f:
-            meta = json.load(f)
+            meta.update(json.load(f))
     title = meta.get("title") or os.path.splitext(os.path.basename(video_path))[0].replace("_", " ").title()
     meta.setdefault("title", title)
     meta.setdefault("header", title.upper())
@@ -210,10 +213,13 @@ def finish_draft(work, clip, meta, words, framing, track_x, start, end, source, 
     draft's saved words.json and meta.json without re-transcribing or re-picking.
     """
     from framefluence.auto_subtitles import payoff_line, write_subtitles
+    from framefluence.look import full_look, resolve_watermark
     from framefluence.make_reel import convert_to_reel
     from framefluence.trend_agent import generate_content_package
 
-    style = style or meta.get("caption_style", "bold")
+    look = full_look({**meta, **({"caption_style": style} if style else {})})
+    style = look["caption_style"]
+    watermark, watermark_align, watermark_y = resolve_watermark(meta)
     # Hook box and show title are off by default (they cover the picture); the hook still leads the
     # post caption. Opt back in per draft with meta "show_hook" / "show_header".
     on_video_hook = meta.get("hook") if meta.get("show_hook") else None
@@ -222,8 +228,8 @@ def finish_draft(work, clip, meta, words, framing, track_x, start, end, source, 
     if meta["mode"] == "quote" and (words or on_video_hook):
         # When shown, the hook lives in the .ass file (boxed, wrapped, animated), not as drawtext
         subtitle_file = write_subtitles(words, os.path.join(work, "subtitles.ass"), style=style,
-                                        hook=on_video_hook, hook_seconds=end - start)
-        log.info("    Captions (%s): %s", style, "generated" if subtitle_file else "none")
+                                        hook=on_video_hook, hook_seconds=end - start, look=look)
+        log.info("    Captions (%s, %s): %s", style, look["caption_font"], "generated" if subtitle_file else "none")
     with open(os.path.join(work, "words.json"), "w", encoding="utf-8") as f:
         json.dump(words, f)
 
@@ -235,6 +241,7 @@ def finish_draft(work, clip, meta, words, framing, track_x, start, end, source, 
         quote_text=meta.get("quote") if not subtitle_file else None,
         subtitle_file=os.path.relpath(subtitle_file, ROOT) if subtitle_file else None,
         framing=framing, track_x=track_x,
+        watermark=watermark, watermark_align=watermark_align, watermark_y=watermark_y,
     )
     if not ok:
         raise RuntimeError("FFmpeg render failed")
@@ -252,7 +259,7 @@ def finish_draft(work, clip, meta, words, framing, track_x, start, end, source, 
     with open(os.path.join(work, "caption.txt"), "w", encoding="utf-8") as f:
         f.write(pkg["caption"] + "\n\n" + pkg["hashtags"] + "\n")
     derived = {"source": source, "segment": [round(start, 2), round(end, 2)], "framing": framing,
-               "track_x": track_x, "subtitles": bool(words), "caption_style": style,
+               "track_x": track_x, "subtitles": bool(words), **look,
                "status": "pending_review", "created": datetime.datetime.now().isoformat(timespec="seconds")}
     with open(os.path.join(work, "meta.json"), "w", encoding="utf-8") as f:
         json.dump({**meta, **derived}, f, indent=2)

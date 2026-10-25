@@ -155,15 +155,65 @@ def shift_words(words, start, end):
             for w in words if start <= w["start"] < end]
 
 
-# Caption looks. Colours are &HAABBGGRR; sizes are for the 1080x1920 canvas.
-STYLES = {
-    # Short-form "viral" look: huge uppercase Montserrat Black, thick outline, gold active word that pops
-    "bold": {"font": "Montserrat Black", "size": 96, "outline": 7, "shadow": 3, "upper": True,
-             "active_scale": 115, "pop": True, "margin_v": 560},
-    # Calmer look for emotional scenes: sentence case, smaller, no pop
-    "clean": {"font": "Montserrat", "size": 74, "outline": 5, "shadow": 2, "upper": False,
-              "active_scale": 100, "pop": False, "margin_v": 520},
+# ---------------------------------------------------------------- caption look
+# Everything a viewer sees in the captions is chosen from these three registries, so the Studio,
+# the autopilot and the tests share one source of truth. Colours are ASS &HAABBGGRR; sizes are
+# for the 1080x1920 canvas.
+
+# family = the font's internal family name (what libass matches); file lives in assets/fonts.
+# scale evens out how big each face looks at the same point size.
+FONTS = {
+    "montserrat": {"label": "Montserrat", "family": "Montserrat Black", "file": "Montserrat-Black.ttf", "scale": 1.0},
+    "anton": {"label": "Anton", "family": "Anton", "file": "Anton-Regular.ttf", "scale": 1.1},
+    "bebas": {"label": "Bebas Neue", "family": "Bebas Neue", "file": "BebasNeue-Regular.ttf", "scale": 1.3},
+    "archivo": {"label": "Archivo Black", "family": "Archivo Black", "file": "ArchivoBlack-Regular.ttf", "scale": 0.95},
+    "bangers": {"label": "Bangers", "family": "Bangers", "file": "Bangers-Regular.ttf", "scale": 1.15},
+    "luckiest": {"label": "Luckiest Guy", "family": "Luckiest Guy", "file": "LuckiestGuy-Regular.ttf", "scale": 1.0},
 }
+
+# hex = for the Studio preview; ass = the same colour in &HAABBGGRR
+COLORS = {
+    "gold": {"label": "Gold", "hex": "#FFD700", "ass": "&H0000D7FF"},
+    "green": {"label": "Green", "hex": "#3DDC84", "ass": "&H0084DC3D"},
+    "red": {"label": "Red", "hex": "#FF3B30", "ass": "&H00303BFF"},
+    "cyan": {"label": "Cyan", "hex": "#00E5FF", "ass": "&H00FFE500"},
+    "pink": {"label": "Pink", "hex": "#FF4FD8", "ass": "&H00D84FFF"},
+    "white": {"label": "White", "hex": "#FFFFFF", "ass": "&H00FFFFFF"},
+}
+
+# highlight: "word" = only the spoken word is coloured, "fill" = spoken words stay coloured
+# (karaoke), None = plain white. box = text sits on a dark box instead of an outline.
+STYLES = {
+    "bold": {"label": "Bold", "size": 96, "outline": 7, "shadow": 3, "upper": True,
+             "active_scale": 115, "pop": True, "highlight": "word", "box": False},
+    "karaoke": {"label": "Karaoke", "size": 92, "outline": 7, "shadow": 3, "upper": True,
+                "active_scale": 108, "pop": True, "highlight": "fill", "box": False},
+    "boxed": {"label": "Boxed", "size": 80, "outline": 14, "shadow": 0, "upper": True,
+              "active_scale": 100, "pop": False, "highlight": "word", "box": True},
+    "clean": {"label": "Clean", "size": 74, "outline": 5, "shadow": 2, "upper": False,
+              "active_scale": 100, "pop": False, "highlight": "word", "box": False},
+    "minimal": {"label": "Minimal", "size": 68, "outline": 3, "shadow": 2, "upper": False,
+                "active_scale": 100, "pop": False, "highlight": None, "box": False},
+}
+
+SIZES = {"s": 0.82, "m": 1.0, "l": 1.2}
+DEFAULT_LOOK = {"caption_style": "bold", "caption_font": "montserrat", "caption_color": "gold",
+                "caption_size": "m", "caption_position": 0.71}
+WHITE = "&H00FFFFFF"
+
+
+def resolve_look(meta):
+    """A draft's caption settings with unknown or missing values replaced by the defaults."""
+    look = dict(DEFAULT_LOOK)
+    for key, registry in (("caption_style", STYLES), ("caption_font", FONTS),
+                          ("caption_color", COLORS), ("caption_size", SIZES)):
+        if meta.get(key) in registry:
+            look[key] = meta[key]
+    try:
+        look["caption_position"] = min(0.95, max(0.1, float(meta.get("caption_position", look["caption_position"]))))
+    except (TypeError, ValueError):
+        pass
+    return look
 
 
 def _greedy_lines(words, width):
@@ -190,9 +240,10 @@ def wrap_hook(text, width=20):
     return r"\N".join(_greedy_lines(words, target))
 
 
-def build_caption_events(words, style="bold", max_words=3):
-    """One Dialogue line per spoken word: the phrase with that word gold (and enlarged in 'bold')."""
+def build_caption_events(words, style="bold", max_words=3, color="gold"):
+    """One Dialogue line per spoken word: the phrase with that word highlighted per the style."""
     cfg = STYLES[style]
+    accent = COLORS[color]["ass"]
     events = []
     for group in group_words(words, max_words=max_words):
         texts = [g["word"].upper() if cfg["upper"] else g["word"] for g in group]
@@ -202,7 +253,8 @@ def build_caption_events(words, style="bold", max_words=3):
             pop = cfg["pop"] and i == 0
             tokens = []
             for j, t in enumerate(texts):
-                colour = GOLD if j == i else "&H00FFFFFF"
+                lit = (j == i) if cfg["highlight"] == "word" else (j <= i) if cfg["highlight"] == "fill" else False
+                colour = accent if lit else WHITE
                 scale = cfg["active_scale"] if j == i else 100
                 grow = rf"\fscx{scale * 4 // 5}\fscy{scale * 4 // 5}\t(0,90,\fscx{scale}\fscy{scale})" if pop \
                     else rf"\fscx{scale}\fscy{scale}"
@@ -213,15 +265,31 @@ def build_caption_events(words, style="bold", max_words=3):
     return events
 
 
-def write_subtitles(words, output_path, style="bold", hook=None, hook_seconds=None):
+def caption_style_line(look):
+    """The ASS Style: line for captions. Position is the caption's baseline as a share of height."""
+    cfg = STYLES[look["caption_style"]]
+    font = FONTS[look["caption_font"]]
+    size = round(cfg["size"] * font["scale"] * SIZES[look["caption_size"]])
+    margin_v = round((1 - look["caption_position"]) * 1920)
+    if cfg["box"]:
+        # BorderStyle 3: an opaque box behind the text; Outline is the box padding
+        border, outline_col, back_col = 3, "&H50000000", "&H50000000"
+    else:
+        border, outline_col, back_col = 1, "&H00000000", "&H90000000"
+    return (f"Style: Caption,{font['family']},{size},{WHITE},&H000000FF,{outline_col},{back_col},"
+            f"0,0,0,0,100,100,1,0,{border},{cfg['outline']},{cfg['shadow']},2,70,70,{margin_v},1")
+
+
+def write_subtitles(words, output_path, style="bold", hook=None, hook_seconds=None, look=None):
     """
     Writes the styled .ass file: word-by-word captions plus (optionally) the hook as a white box
-    with black text at the top, fading in. Returns the path, or None if there is nothing to draw.
+    with black text at the top, fading in. `look` (see resolve_look) overrides style, font, colour,
+    size and position. Returns the path, or None if there is nothing to draw.
     """
     from framefluence.subtitle_engine import format_timestamp_ass as ts
 
-    cfg = STYLES[style]
-    events = build_caption_events(words, style) if words else []
+    look = resolve_look({"caption_style": style, **(look or {})})
+    events = build_caption_events(words, look["caption_style"], color=look["caption_color"]) if words else []
     if hook:
         end = hook_seconds or (max((e[1] for e in events), default=0.0) + 1.0)
         events.insert(0, (0.0, end, "Hook", r"{\fad(250,0)}" + wrap_hook(hook)))
@@ -238,8 +306,8 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Caption,{cfg['font']},{cfg['size']},&H00FFFFFF,&H000000FF,&H00000000,&H90000000,-1,0,0,0,100,100,1,0,1,{cfg['outline']},{cfg['shadow']},2,70,70,{cfg['margin_v']},1
-Style: Hook,Montserrat Black,66,&H00000000,&H000000FF,&H00FFFFFF,&H00FFFFFF,-1,0,0,0,100,100,0,0,3,18,0,8,80,80,240,1
+{caption_style_line(look)}
+Style: Hook,Montserrat Black,66,&H00000000,&H000000FF,&H00FFFFFF,&H00FFFFFF,0,0,0,0,100,100,0,0,3,18,0,8,80,80,240,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text

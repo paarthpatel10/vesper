@@ -39,7 +39,9 @@ def build_ffmpeg_command(
     pan_x=0,
     pan_y=80,
     zoom=1.125,
-    track_x=None  # crop x expression for "track" framing (see reframe.py)
+    track_x=None,  # crop x expression for "track" framing (see reframe.py)
+    watermark_align=None,  # "left" | "center" | "right"; None keeps the automatic placement
+    watermark_y=None  # top of the watermark in px on the 1920 canvas
 ):
     if mode not in ["quote", "split", "clean"]:
         raise ValueError(f"Invalid mode: '{mode}'. Supported modes are: quote, split, clean")
@@ -111,8 +113,16 @@ def build_ffmpeg_command(
         # Discreet Watermark
         if watermark:
             safe_watermark = watermark.replace("'", "’").replace(":", "\\:")
+            if watermark_align or watermark_y is not None:
+                # Placement chosen by the user (Studio look settings)
+                wx = {"left": "60", "right": "w-text_w-60"}.get(watermark_align, "(w-text_w)/2")
+                wy = int(watermark_y) if watermark_y is not None else 100
+                filters.append(
+                    f"[{last_stream}]drawtext=fontfile={font_bold}:text='{safe_watermark}':"
+                    f"fontcolor=white@0.7:fontsize=28:x={wx}:y={wy}:shadowcolor=black@0.6:shadowx=1:shadowy=1[v_wm]"
+                )
             # If header is present, position watermark neatly at top-right
-            if header_text:
+            elif header_text:
                 filters.append(
                     f"[{last_stream}]drawtext=fontfile={font_bold}:text='{safe_watermark}':"
                     f"fontcolor=white@0.7:fontsize=28:x=w-text_w-60:y=80:shadowcolor=black@0.6:shadowx=1:shadowy=1[v_wm]"
@@ -236,6 +246,8 @@ def main():
     parser.add_argument("--pan-x", type=int, default=0, help="Horizontal crop offset in pixels")
     parser.add_argument("--pan-y", type=int, default=80, help="Vertical crop offset in pixels")
     parser.add_argument("--zoom", type=float, default=1.125, help="Cinema zoom factor for full_bleed framing")
+    parser.add_argument("--watermark-align", choices=["left", "center", "right"], help="Watermark horizontal placement")
+    parser.add_argument("--watermark-y", type=int, help="Watermark top edge in px (0-1920)")
 
     args = parser.parse_args()
 
@@ -264,7 +276,9 @@ def main():
         pan_x=args.pan_x,
         pan_y=args.pan_y,
         zoom=args.zoom,
-        track_x=track_x
+        track_x=track_x,
+        watermark_align=args.watermark_align,
+        watermark_y=args.watermark_y
     )
 
 if __name__ == "__main__":
