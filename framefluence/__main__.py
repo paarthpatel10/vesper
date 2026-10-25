@@ -7,6 +7,7 @@ One entry point for every tool:
     python -m framefluence reel        # render one reel with make_reel options
     python -m framefluence trends      # trend radar and post packages
     python -m framefluence calendar    # regenerate data/top_50_actors_calendar.csv
+    python -m framefluence script <guide.md>   # cut every clip listed in a scripts guide
 
 Anything after the command is passed to that tool, e.g. `python -m framefluence autopilot --drafts 2`.
 """
@@ -24,6 +25,7 @@ COMMANDS = {
     "reel": "framefluence.make_reel",
     "trends": "framefluence.trend_agent",
     "calendar": "framefluence.update_actor_calendar",
+    "script": "framefluence.script_clips",
 }
 
 

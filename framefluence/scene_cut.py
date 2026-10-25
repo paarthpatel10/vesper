@@ -154,6 +154,8 @@ def cut_clip(video_path, start, end, output_path):
     """Re-encodes [start, end) into output_path so timestamps restart at zero for later steps."""
     cmd = [
         "ffmpeg", "-y", "-ss", f"{start:.3f}", "-i", video_path, "-t", f"{end - start:.3f}",
+        # Explicit streams: some releases carry cover art as a second "video" stream
+        "-map", "0:v:0", "-map", "0:a:0?",
         "-c:v", "libx264", "-preset", "fast", "-crf", "17", "-c:a", "aac", "-b:a", "192k",
         output_path,
     ]
