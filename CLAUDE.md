@@ -71,9 +71,9 @@ powershell -ExecutionPolicy Bypass -File scripts/schedule_autopilot.ps1 -Time 09
   - It can't see scene changes that have no long pause. Colour-histogram scene grouping was tried and failed, because single-location episodes look the same throughout.
 - **`reframe.py`:** one constant crop per shot (the median of the largest face's centre), hard-cutting between shots. The output is an FFmpeg `if(lt(t,..),x,...)` expression for the source scaled to 1920px high, passed to `make_reel` as `track_x`.
 - **`auto_subtitles.py`:** faster-whisper word timestamps, then phrases of ≤3 words broken on pauses and sentence ends, then one `.ass` event per word.
-  - `write_subtitles()` builds its own multi-style `.ass` file; it doesn't use `subtitle_engine`.
-    - `Caption` style: `STYLES["bold"]` (default) is uppercase Montserrat Black 96 with a thick outline; the active word is gold at 115%, and each phrase pops in from 80% on its first word only. `"clean"` is sentence case, smaller, with no pop.
-    - `Hook` style: black text on a white box (`BorderStyle 3`) at the top, wrapped by `wrap_hook()` (balanced lines, no orphan words) and fading in.
+  - **The caption-look registries live here:** `FONTS` (id, label, internal `family` libass matches, `file` in `assets/fonts`, size `scale`), `COLORS` (`hex` for the UI, `ass` &HAABBGGRR), `STYLES` (`bold`, `karaoke`, `boxed`, `clean`, `minimal`; `highlight` is `"word"`, `"fill"` or `None`, and `box` means `BorderStyle 3`), `SIZES` and `DEFAULT_LOOK`. Adding a font or style is a registry entry; the Studio picks it up via `/api/options`.
+  - `write_subtitles(..., look=...)` builds its own multi-style `.ass` file (it doesn't use `subtitle_engine`). `caption_style_line()` turns a look into the `Caption` style: size = style size × font scale × size factor, and `margin_v = (1 - caption_position) × 1920`. The `Hook` style is black on a white box, wrapped by `wrap_hook()`.
+  - Font `family` must be the font's internal name-table family (for example `"Montserrat Black"`, `"Bebas Neue"`), or libass silently falls back. Check libass's `fontselect:` lines with `-loglevel verbose`.
   - The highlight is tagged **by position**; `subtitle_engine`'s `highlight_word` uses `str.replace` and would light up every repeated word.
   - Write ASS override tags as raw strings (`r"{\fscx80}"`). In plain strings, `\f` is a form-feed and `\N` is a syntax error.
   - Caption styling costs almost no render time; benchmarks run at about 1x realtime with or without captions.
@@ -87,6 +87,13 @@ powershell -ExecutionPolicy Bypass -File scripts/schedule_autopilot.ps1 -Time 09
 - **Draft data:** `meta.json` `pick` (`"editor"`, a beat rank `1..n`, or `"whole"`) drives the card badge. Strips are grouped by `header`.
 - **UI design:** a projection-booth umber palette with the reels' caption gold (`#FFD700`) as the accent, and drafts shown as frames on a sprocketed film strip. `#open=<status>/<name>` deep-links into the editor, which is handy for headless screenshots. Headless Edge enforces a ~500px minimum viewport, so screenshots narrower than that are cropped.
 
+### Look settings: `framefluence/look.py`
+- A draft's look is flat keys in `meta.json`: `caption_style`, `caption_font`, `caption_color`, `caption_size`, `caption_position` (0.1–0.95, the caption baseline as a share of height), `show_watermark`, `watermark_align` (`left`/`center`/`right`), and `watermark_position` (0–0.97, the top of the watermark).
+- `sanitize()` is the only gate for user input (Studio edits, `settings.json`). `full_look()` fills in defaults. `resolve_watermark()` returns `(text, align, y_px)` for `make_reel`; drafts with no watermark keys keep the legacy automatic placement.
+- **Defaults:** the Studio's "Use as my default" writes `settings.json` at the repo root (git-ignored). `autopilot.load_clip_meta` starts every new draft from it, and a `clip.json` overrides.
+- **Studio editor:** a Look tab and a Post tab. The live **Layout preview** draws the caption and watermark over `clean.jpg` (a caption-free frame cut from `source_cut.mp4` with the same crop) using the same maths as `caption_style_line()`. Keep the two in sync when changing caption sizing or positioning.
+- **Browser fonts:** caption fonts are loaded with `FontFace` in parallel and never block the editor. Montserrat reuses the page's own `@font-face` (weight 900): loading the same file twice made Chrome fail one request with "NetworkError".
+
 ### Video engine: `framefluence/make_reel.py`
 - `build_ffmpeg_command(...)` is a **pure function** returning the argv list; `convert_to_reel()` just runs it. Tests check substrings of `" ".join(cmd)`.
 - **Pipeline:** framing produces `[v1]`. Each overlay (`v_hdr`, `v_wm`, `v_hook`, `v_quote`, `v_sub`) reads `[{last_stream}]` and outputs a new label. New overlays must follow this pattern.
@@ -98,6 +105,7 @@ powershell -ExecutionPolicy Bypass -File scripts/schedule_autopilot.ps1 -Time 09
 - **Split mode:** two 1080x960 halves `vstack`ed, watermark only, audio from the top clip.
 - **Mode rules:** hook and quote render only in `quote` mode, and `--quote` is skipped when `--subtitles` is given.
 - **Layout (y on 1920):** header 150 (34px), watermark 100 (or top-right 80 with a header, 28px), quote 1480. The hook box top is at 240, from the `.ass` file; the drawtext hook at 280 is used only when there are no subtitles. Captions sit at `margin_v` 560 from the bottom, above Instagram's UI.
+- **Watermark placement:** `watermark_align`/`watermark_y` (CLI `--watermark-align`/`--watermark-y`) override the automatic spot (centre y=100, or top-right with a header).
 - **Escaping:** `drawtext` text has `'` replaced with `’` and `:` escaped to `\:`. Subtitle paths change `\` to `/` and escape `:`.
 - **Adding a CLI option:** update the signature, `argparse`, the explicit `convert_to_reel(...)` kwargs, `autopilot.process_clip` if relevant, and `trend_agent.generate_content_package`'s `suggested_command`, which must stay valid per mode.
 

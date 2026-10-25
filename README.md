@@ -9,7 +9,8 @@ Vesper powers the [@framefluence](https://instagram.com/framefluence) cinema pag
 - **Finds scenes worth posting.** It scores stretches of dialogue on audience laughter, how much is being said, and whether the moment lands at the end. Theme songs and scene transitions are skipped.
 - **Cuts on clean breaks.** Clips start and end on a pause that falls on a shot change, never mid-sentence.
 - **Follows faces.** Each shot gets a 9:16 crop centred on the main face (OpenCV YuNet).
-- **Captions every word.** Uppercase Montserrat Black, with the spoken word highlighted in gold. When the video has its own subtitle track, its exact wording is used with Whisper's timing.
+- **Captions every word.** Pick from six fonts (Montserrat, Anton, Bebas Neue, Archivo Black, Bangers, Luckiest Guy), five caption styles (bold, karaoke, boxed, clean, minimal), a highlight colour, a size and a position on screen. When the video has its own subtitle track, its exact wording is used with Whisper's timing.
+- **Places your watermark.** Show or hide `@framefluence` and put it left, centre or right, anywhere from top to bottom.
 - **Writes the post.** A caption with the hook, the scene's punchline, a question for comments and hashtags.
 - **Suggests what to post.** Upcoming actor birthdays, trending trailers and proven formats from similar pages.
 
@@ -42,7 +43,7 @@ Always run commands from the repository root.
 python -m framefluence studio       # web studio at http://127.0.0.1:8765
 ```
 
-In the studio, drop a video on the left, press **Make reels**, then open a draft to edit its hook, hashtags or caption style, re-render it, and approve or reject it.
+In the studio, drop a video on the left, press **Make reels**, then open a draft. The **Look** tab sets the font, caption style, colour, size and position, and where the watermark goes, with a live layout preview before you re-render. **Use as my default** makes new reels start with that look. The **Post** tab edits the hook, hashtags and caption text.
 
 Or from the command line:
 
@@ -84,7 +85,7 @@ framefluence/        the Python package
   studio.py, ui/     local web studio
   trend_agent.py     post ideas and captions
 data/                actor calendar and peer benchmarks
-assets/fonts/        Montserrat (SIL Open Font License)
+assets/fonts/        caption fonts (SIL Open Font License / Apache 2.0; licences in assets/fonts/licenses/)
 models/              YuNet face detection model (OpenCV Zoo)
 scripts/             Windows scheduler
 tests/               python -m unittest discover tests
