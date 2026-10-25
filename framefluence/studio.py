@@ -24,9 +24,14 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from framefluence.paths import FONTS, INBOX, LOGS, ROOT, UI as UI_DIR
 STATUS_DIRS = {"pending": "review", "approved": "approved", "rejected": "rejected"}
 VIDEO_EXTS = (".mp4", ".mov", ".mkv", ".webm", ".m4v")
-EDITABLE = ("hook", "header", "hashtags", "caption_style", "question", "context")
+EDITABLE = ("hook", "header", "hashtags", "question", "context")  # look keys are validated by look.sanitize
 FLAGS = ("show_hook", "show_header")  # on-video hook box / show title; off unless chosen
 DRAFT_NAME = re.compile(r"^[\w.-]+$")
+
+
+def look_settings(fields):
+    from framefluence.look import sanitize
+    return sanitize(fields)
 
 
 def pipeline_python():
@@ -54,6 +59,7 @@ def read_json(path, default):
 
 
 def list_drafts():
+    from framefluence.look import full_look
     drafts = []
     for status, folder in STATUS_DIRS.items():
         base = os.path.join(ROOT, folder)
@@ -78,6 +84,7 @@ def list_drafts():
                 "framing": meta.get("framing"), "subtitles": meta.get("subtitles", False),
                 "source": meta.get("source", ""), "created": meta.get("created", ""),
                 "show_hook": bool(meta.get("show_hook")), "show_header": bool(meta.get("show_header")),
+                "look": full_look(meta),
                 "caption": caption, "restylable": os.path.exists(os.path.join(path, "source_cut.mp4")),
             })
     return drafts
@@ -110,11 +117,26 @@ def update_meta(status, name, fields):
     meta = read_json(meta_path, {})
     meta.update({k: str(v).strip() for k, v in fields.items() if k in EDITABLE})
     meta.update({k: bool(fields[k]) for k in FLAGS if k in fields})
-    if meta.get("caption_style") not in ("bold", "clean"):
-        meta["caption_style"] = "bold"
+    meta.update(look_settings(fields))
     with open(meta_path, "w", encoding="utf-8") as f:
         json.dump(meta, f, indent=2)
     return path
+
+
+def clean_frame(path):
+    """A caption-free frame (from source_cut.mp4, same 9:16 crop) for the Studio's live layout preview."""
+    frame = os.path.join(path, "clean.jpg")
+    source = os.path.join(path, "source_cut.mp4")
+    if os.path.exists(frame) or not os.path.exists(source):
+        return frame if os.path.exists(frame) else None
+    meta = read_json(os.path.join(path, "meta.json"), {})
+    if meta.get("framing") == "track" and meta.get("track_x"):
+        crop = f"scale=-2:1920,crop=1080:1920:x='{meta['track_x']}':y=0"
+    else:
+        crop = "scale=-2:1920,crop=1080:1920"
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-ss", "1", "-i", source, "-frames:v", "1",
+                    "-vf", f"{crop},scale=540:-2", frame], check=False)
+    return frame if os.path.exists(frame) else None
 
 
 def thumbnail(path):
@@ -303,6 +325,9 @@ class Handler(BaseHTTPRequestHandler):
         if parts[:2] == ["api", "drafts"] and len(parts) == 5 and parts[4] == "transcript":
             path = draft_dir(parts[2], parts[3])
             return self.send_json({"text": transcript(path)}) if path else self.send_error_json(404, "no draft")
+        if parts[:2] == ["api", "options"]:
+            from framefluence.look import options
+            return self.send_json(options())
         if parts[:2] == ["api", "inbox"]:
             return self.send_json({"items": inbox_items()})
         if parts[:2] == ["api", "job"]:
@@ -316,6 +341,9 @@ class Handler(BaseHTTPRequestHandler):
             path = draft_dir(parts[1], parts[2])
             if path and parts[3] == "reel.mp4":
                 return self.send_file(os.path.join(path, "reel.mp4"), "video/mp4")
+            if path and parts[3] == "clean.jpg":
+                frame = clean_frame(path) or thumbnail(path)
+                return self.send_file(frame, "image/jpeg") if frame else self.send_error_json(404, "no frame")
             if path and parts[3] == "thumb.jpg":
                 thumb = thumbnail(path)
                 return self.send_file(thumb, "image/jpeg") if thumb else self.send_error_json(404, "no thumbnail")
@@ -329,6 +357,9 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if parts == ["api", "upload"]:
                 return self.upload(urllib.parse.parse_qs(url.query))
+            if parts == ["api", "settings"]:
+                from framefluence.look import save_defaults
+                return self.send_json({"ok": True, "defaults": save_defaults(self.read_body_json())})
             if parts == ["api", "run"]:
                 body = self.read_body_json()
                 args = ["--no-briefing", "--drafts", str(int(body.get("drafts", 3))),

@@ -28,6 +28,7 @@
   body { background: var(--booth); color: var(--paper); font: 15px/1.5 var(--ui); }
   button, input, textarea, select { font: inherit; color: inherit; }
   :focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  [hidden] { display: none !important; }  /* beat component display rules (video, preview, panes) */
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 
   /* ---------- shell */
@@ -132,21 +133,37 @@
 
   /* ---------- editor */
   dialog.editor { border: 0; padding: 0; background: var(--panel); color: var(--paper); border-radius: 14px;
-                  width: min(1040px, 96vw); max-height: 94vh; }
+                  width: min(1100px, 96vw); max-height: 94vh; }
   dialog.editor::backdrop { background: rgba(10, 8, 6, .78); }
-  .ed { display: grid; grid-template-columns: auto 1fr; max-height: 94vh; }
-  .ed-video { background: #000; padding: 16px; display: flex; align-items: center; justify-content: center; }
-  .ed-video video { height: min(78vh, 720px); aspect-ratio: 9 / 16; background: #000; border-radius: 6px; display: block; }
-  .ed-side { padding: 22px 24px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+  .ed { display: grid; grid-template-columns: auto minmax(0, 1fr); max-height: 94vh; }
+  .ed-video { background: #000; padding: 14px 16px 16px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .ed-video video, .preview { height: min(74vh, 690px); aspect-ratio: 9 / 16; background: #000; border-radius: 6px; display: block; }
+  .ed-side { display: flex; flex-direction: column; min-height: 0; max-height: 94vh; }
+  .ed-scroll { padding: 20px 24px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; flex: 1; }
+  .ed-foot { padding: 14px 24px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .ed-foot .spacer { flex: 1; }
   .ed-head { display: flex; align-items: start; gap: 12px; }
   .ed-head h2 { font-size: 20px; margin: 0; flex: 1; }
   .ed-meta { color: var(--muted); font-size: 13px; margin: 2px 0 0; }
   .close { background: none; border: 0; color: var(--muted); font-size: 26px; line-height: 1; cursor: pointer; padding: 0 4px; }
-  .seg { display: inline-flex; background: var(--booth); border: 1px solid var(--line); border-radius: 8px; padding: 3px; }
-  .seg button { border: 0; background: none; padding: 6px 14px; border-radius: 6px; cursor: pointer; color: var(--muted); }
+  .seg { display: inline-flex; flex-wrap: wrap; background: var(--booth); border: 1px solid var(--line); border-radius: 8px; padding: 3px; gap: 2px; }
+  .seg button { border: 0; background: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; color: var(--muted); }
   .seg button[aria-pressed="true"] { background: var(--panel-2); color: var(--paper); }
-  .seg .bold-sample { font: 900 13px var(--display); text-transform: uppercase; }
-  .seg .clean-sample { font: 700 13px var(--display); }
+  .ed-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin: 0 -24px; padding: 0 24px; }
+  .group { display: grid; gap: 8px; }
+  .group > .label { font-size: 13px; color: var(--muted); }
+  .fonts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .font-btn { background: var(--booth); border: 1px solid var(--line); border-radius: 8px; padding: 8px 6px;
+              cursor: pointer; font-size: 18px; line-height: 1.1; color: var(--paper); text-align: center;
+              overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .font-btn[aria-pressed="true"] { border-color: var(--gold); box-shadow: inset 0 0 0 1px var(--gold); }
+  .swatches { display: flex; gap: 8px; flex-wrap: wrap; }
+  .swatch { width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--line); cursor: pointer; padding: 0; }
+  .swatch[aria-pressed="true"] { border-color: var(--paper); box-shadow: 0 0 0 2px var(--booth), 0 0 0 4px var(--paper); }
+  .slider { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; font-size: 12px; color: var(--muted); }
+  .slider input { accent-color: var(--gold); width: 100%; }
+  .warn { font-size: 12px; color: #E8A33D; margin: 0; }
+  .wm-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
   .actions { display: flex; flex-wrap: wrap; gap: 8px; }
   .check { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); cursor: pointer; }
   .check input { accent-color: var(--gold); width: 16px; height: 16px; }
@@ -155,6 +172,14 @@
   details.transcript summary { cursor: pointer; color: var(--muted); font-size: 13px; }
   details.transcript p { font-size: 13px; color: var(--muted); }
 
+  /* live layout preview: a caption-free frame with the chosen caption and watermark drawn on top */
+  .preview { position: relative; overflow: hidden; background-size: cover; background-position: center; }
+  .pv-cap { position: absolute; left: 4%; right: 4%; text-align: center; line-height: 1.15; color: #fff; }
+  .pv-cap span.box { background: rgba(0, 0, 0, .69); }
+  .pv-wm { position: absolute; font: 700 10px var(--display); color: rgba(255, 255, 255, .7);
+           text-shadow: 1px 1px 1px rgba(0, 0, 0, .6); white-space: nowrap; }
+  .pv-note { position: absolute; left: 8px; top: 8px; background: rgba(0, 0, 0, .65); color: var(--paper);
+             font-size: 11px; padding: 2px 8px; border-radius: 4px; }
   .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--paper);
            color: var(--booth); padding: 10px 16px; border-radius: 8px; font-weight: 600; z-index: 10;
            opacity: 0; pointer-events: none; transition: opacity .2s; }
@@ -241,35 +266,73 @@
 
 <dialog class="editor" id="editor" aria-labelledby="edTitle">
   <div class="ed">
-    <div class="ed-video"><video id="edVideo" controls playsinline preload="metadata"></video></div>
+    <div class="ed-video">
+      <div class="seg" role="group" aria-label="Left panel">
+        <button type="button" data-view="video" aria-pressed="true">Video</button>
+        <button type="button" data-view="preview" aria-pressed="false">Layout preview</button>
+      </div>
+      <video id="edVideo" controls playsinline preload="metadata"></video>
+      <div class="preview" id="preview" hidden>
+        <span class="pv-note">Preview of your settings</span>
+        <div class="pv-wm" id="pvWm">@framefluence</div>
+        <div class="pv-cap" id="pvCap"></div>
+      </div>
+    </div>
     <div class="ed-side">
-      <div class="ed-head">
-        <div style="flex:1"><h2 id="edTitle"></h2><p class="ed-meta" id="edMeta"></p></div>
-        <button class="close" id="edClose" aria-label="Close editor" autofocus>×</button>
-      </div>
-      <div class="field" style="margin:0"><label for="edHook">Hook (first line of the post caption)</label>
-        <textarea id="edHook" rows="2"></textarea></div>
-      <label class="check"><input type="checkbox" id="edOverlay"> Also show the hook and show title on the video</label>
-      <div class="field" style="margin:0"><label>Caption style</label>
-        <div class="seg" role="group" aria-label="Caption style">
-          <button type="button" data-style="bold" aria-pressed="true"><span class="bold-sample">Bold</span></button>
-          <button type="button" data-style="clean" aria-pressed="false"><span class="clean-sample">Clean</span></button>
+      <div class="ed-scroll">
+        <div class="ed-head">
+          <div style="flex:1"><h2 id="edTitle"></h2><p class="ed-meta" id="edMeta"></p></div>
+          <button class="close" id="edClose" aria-label="Close editor" autofocus>×</button>
+        </div>
+        <div class="ed-tabs" role="tablist" aria-label="Editor">
+          <button class="tab" role="tab" data-pane="look" aria-selected="true">Look</button>
+          <button class="tab" role="tab" data-pane="post" aria-selected="false">Post</button>
+        </div>
+
+        <div id="paneLook" class="group" style="gap:18px">
+          <div class="group"><span class="label">Font</span><div class="fonts" id="lkFonts"></div></div>
+          <div class="group"><span class="label">Caption style</span><div class="seg" id="lkStyles" role="group" aria-label="Caption style"></div></div>
+          <div class="group"><span class="label">Highlight colour</span><div class="swatches" id="lkColors"></div></div>
+          <div class="group"><span class="label">Caption size</span>
+            <div class="seg" id="lkSizes" role="group" aria-label="Caption size">
+              <button type="button" data-size="s">Small</button><button type="button" data-size="m">Medium</button><button type="button" data-size="l">Large</button>
+            </div></div>
+          <div class="group"><label class="label" for="lkCapPos">Caption position</label>
+            <div class="slider"><span>Higher</span><input type="range" id="lkCapPos" min="10" max="95" step="1"><span>Lower</span></div>
+            <p class="warn" id="lkCapWarn" hidden>Instagram's buttons and caption may cover text this low.</p></div>
+          <div class="group"><span class="label">Watermark</span>
+            <label class="check"><input type="checkbox" id="lkWmShow"> Show @framefluence on the video</label>
+            <div class="wm-row">
+              <div class="seg" id="lkWmAlign" role="group" aria-label="Watermark alignment">
+                <button type="button" data-align="left">Left</button><button type="button" data-align="center">Centre</button><button type="button" data-align="right">Right</button>
+              </div>
+            </div>
+            <div class="slider"><span>Top</span><input type="range" id="lkWmPos" min="0" max="97" step="1" aria-label="Watermark position"><span>Bottom</span></div>
+          </div>
+          <div class="actions"><button class="btn" id="lkDefault">Use as my default for new reels</button></div>
+        </div>
+
+        <div id="panePost" class="group" style="gap:14px" hidden>
+          <div class="field" style="margin:0"><label for="edHook">Hook (first line of the post caption)</label>
+            <textarea id="edHook" rows="2"></textarea></div>
+          <label class="check"><input type="checkbox" id="edOverlay"> Also show the hook and show title on the video</label>
+          <div class="field" style="margin:0"><label for="edTags">Hashtags</label><input id="edTags"></div>
+          <div>
+            <div class="ed-head" style="align-items:center;margin-bottom:6px">
+              <h2 style="font-size:15px">Post caption</h2>
+              <button class="btn" id="edCopy">Copy caption</button>
+            </div>
+            <div class="caption-box" id="edCaption"></div>
+          </div>
+          <details class="transcript" id="edTranscript"><summary>What's said in this reel</summary><p></p></details>
         </div>
       </div>
-      <div class="field" style="margin:0"><label for="edTags">Hashtags</label><input id="edTags"></div>
-      <div class="actions">
+      <div class="ed-foot">
         <button class="btn primary" id="edSave">Save and re-render</button>
-        <a class="btn" id="edDownload" download>Download reel</a>
+        <a class="btn" id="edDownload" download>Download</a>
+        <span class="spacer"></span>
+        <span class="actions" id="edReview"></span>
       </div>
-      <div class="actions" id="edReview"></div>
-      <div>
-        <div class="ed-head" style="align-items:center;margin-bottom:6px">
-          <h2 style="font-size:15px">Post caption</h2>
-          <button class="btn" id="edCopy">Copy caption</button>
-        </div>
-        <div class="caption-box" id="edCaption"></div>
-      </div>
-      <details class="transcript" id="edTranscript"><summary>What's said in this reel</summary><p></p></details>
     </div>
   </div>
 </dialog>
@@ -367,19 +430,159 @@ function frameEl(d) {
   return b;
 }
 
-document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => {
-  document.querySelectorAll(".tab").forEach(x => x.setAttribute("aria-selected", x === t));
+document.querySelectorAll(".tabs .tab").forEach(t => t.addEventListener("click", () => {
+  document.querySelectorAll(".tabs .tab").forEach(x => x.setAttribute("aria-selected", x === t));
   state.tab = t.dataset.status;
   renderReels();
 }));
 
-/* ---------- editor */
-function setStyle(s) {
-  state.style = s;
-  document.querySelectorAll(".seg button").forEach(b => b.setAttribute("aria-pressed", b.dataset.style === s));
-}
-document.querySelectorAll(".seg button").forEach(b => b.addEventListener("click", () => setStyle(b.dataset.style)));
+/* ---------- editor: look controls */
+const look = { opts: null, value: {} };
 
+const fontFamily = f => (f.id === "montserrat" ? `"Montserrat", var(--display)` : `"ff-${f.id}", var(--display)`);
+const fontWeight = f => (f.id === "montserrat" ? 900 : 400);
+
+async function loadFont(f) {
+  // Montserrat Black is already declared by the page's @font-face (weight 900); fetching it a second
+  // time through FontFace races the CSS load, so it reuses that declaration instead.
+  if (f.id === "montserrat") return document.fonts.load(`900 16px "Montserrat"`);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const face = new FontFace(`ff-${f.id}`, `url(/fonts/${encodeURIComponent(f.file)})`);
+      document.fonts.add(await face.load());
+      return;
+    } catch (err) {
+      if (attempt) console.warn(`Caption font ${f.file} failed to load: ${err}`);
+    }
+  }
+}
+
+async function loadOptions() {
+  look.opts = await api("/api/options");
+  // Fonts load in the background and in parallel; the editor never waits for them
+  Promise.allSettled(look.opts.fonts.map(loadFont)).then(renderPreview);
+  $("#lkFonts").innerHTML = "";
+  for (const f of look.opts.fonts) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "font-btn"; b.dataset.font = f.id;
+    b.style.fontFamily = fontFamily(f);
+    b.style.fontWeight = fontWeight(f);
+    b.textContent = f.label;
+    b.addEventListener("click", () => setLook({ caption_font: f.id }));
+    $("#lkFonts").appendChild(b);
+  }
+  $("#lkStyles").innerHTML = "";
+  for (const s of look.opts.styles) {
+    const b = document.createElement("button");
+    b.type = "button"; b.dataset.style = s.id; b.textContent = s.label;
+    b.addEventListener("click", () => setLook({ caption_style: s.id }));
+    $("#lkStyles").appendChild(b);
+  }
+  $("#lkColors").innerHTML = "";
+  for (const c of look.opts.colors) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "swatch"; b.dataset.color = c.id;
+    b.style.background = c.hex; b.setAttribute("aria-label", c.label); b.title = c.label;
+    b.addEventListener("click", () => setLook({ caption_color: c.id }));
+    $("#lkColors").appendChild(b);
+  }
+}
+
+document.querySelectorAll("#lkSizes button").forEach(b => b.addEventListener("click", () => setLook({ caption_size: b.dataset.size })));
+document.querySelectorAll("#lkWmAlign button").forEach(b => b.addEventListener("click", () => setLook({ watermark_align: b.dataset.align })));
+$("#lkCapPos").addEventListener("input", e => setLook({ caption_position: e.target.value / 100 }));
+$("#lkWmPos").addEventListener("input", e => setLook({ watermark_position: e.target.value / 100 }));
+$("#lkWmShow").addEventListener("change", e => setLook({ show_watermark: e.target.checked }));
+
+function setLook(change, { show = true } = {}) {
+  Object.assign(look.value, change);
+  const v = look.value;
+  const press = (sel, attr, val) => document.querySelectorAll(sel).forEach(b => b.setAttribute("aria-pressed", b.dataset[attr] === val));
+  press("#lkFonts button", "font", v.caption_font);
+  press("#lkStyles button", "style", v.caption_style);
+  press("#lkColors button", "color", v.caption_color);
+  press("#lkSizes button", "size", v.caption_size);
+  press("#lkWmAlign button", "align", v.watermark_align);
+  $("#lkCapPos").value = Math.round(v.caption_position * 100);
+  $("#lkWmPos").value = Math.round(v.watermark_position * 100);
+  $("#lkWmShow").checked = !!v.show_watermark;
+  $("#lkCapWarn").hidden = v.caption_position <= 0.82;
+  document.querySelectorAll("#lkWmAlign button, #lkWmPos").forEach(el => (el.disabled = !v.show_watermark));
+  renderPreview();
+  if (show) setView("preview");
+}
+
+function setView(view) {
+  document.querySelectorAll(".ed-video .seg button").forEach(b => b.setAttribute("aria-pressed", b.dataset.view === view));
+  $("#edVideo").hidden = view !== "video";
+  $("#preview").hidden = view !== "preview";
+  if (view === "preview") { $("#edVideo").pause(); renderPreview(); }
+}
+document.querySelectorAll(".ed-video .seg button").forEach(b => b.addEventListener("click", () => setView(b.dataset.view)));
+
+/* Mirrors the renderer's maths (auto_subtitles.caption_style_line) at preview scale */
+function renderPreview() {
+  const box = $("#preview");
+  if (!look.opts || box.hidden) return;
+  const v = look.value, k = box.clientHeight / 1920;
+  const style = look.opts.styles.find(s => s.id === v.caption_style);
+  const font = look.opts.fonts.find(f => f.id === v.caption_font);
+  const color = look.opts.colors.find(c => c.id === v.caption_color).hex;
+  const words = (state.sample || "this is how it looks").split(/\s+/).slice(0, 3);
+  const active = Math.min(1, words.length - 1);
+
+  const cap = $("#pvCap");
+  cap.innerHTML = "";
+  cap.style.fontFamily = fontFamily(font);
+  cap.style.fontWeight = fontWeight(font);
+  cap.style.fontSize = `${style.size * font.scale * look.opts.sizes[v.caption_size] * k}px`;
+  cap.style.bottom = `${(1 - v.caption_position) * 100}%`;
+  const o = Math.max(1, style.outline * k);
+  const ring = style.box ? "none" : [[1,0],[-1,0],[0,1],[0,-1],[.7,.7],[-.7,.7],[.7,-.7],[-.7,-.7]]
+    .map(([x, y]) => `${x * o}px ${y * o}px 0 #000`).join(",");
+  words.forEach((w, i) => {
+    const s = document.createElement("span");
+    s.textContent = (style.upper ? w.toUpperCase() : w) + (i < words.length - 1 ? " " : "");
+    const lit = style.highlight === "word" ? i === active : style.highlight === "fill" ? i <= active : false;
+    s.style.color = lit ? color : "#fff";
+    s.style.textShadow = ring;
+    if (style.box) { s.className = "box"; s.style.padding = `0 ${o}px`; }
+    cap.appendChild(s);
+  });
+
+  const wm = $("#pvWm");
+  wm.hidden = !v.show_watermark;
+  wm.style.fontSize = `${28 * k}px`;
+  wm.style.top = `${v.watermark_position * 100}%`;
+  wm.style.left = wm.style.right = wm.style.transform = "";
+  if (v.watermark_align === "left") wm.style.left = `${60 * k}px`;
+  else if (v.watermark_align === "right") wm.style.right = `${60 * k}px`;
+  else { wm.style.left = "50%"; wm.style.transform = "translateX(-50%)"; }
+}
+
+function lookPayload() {
+  const v = look.value;
+  return { caption_style: v.caption_style, caption_font: v.caption_font, caption_color: v.caption_color,
+           caption_size: v.caption_size, caption_position: v.caption_position, show_watermark: v.show_watermark,
+           watermark_align: v.watermark_align, watermark_position: v.watermark_position };
+}
+
+$("#lkDefault").addEventListener("click", async () => {
+  try {
+    const r = await api("/api/settings", { method: "POST", headers: { "Content-Type": "application/json" },
+                                           body: JSON.stringify(lookPayload()) });
+    look.opts.defaults = { ...look.opts.defaults, ...r.defaults };
+    toast("Saved. New reels will use this look.");
+  } catch (e) { toast(e.message, true); }
+});
+
+document.querySelectorAll(".ed-tabs .tab").forEach(t => t.addEventListener("click", () => {
+  document.querySelectorAll(".ed-tabs .tab").forEach(x => x.setAttribute("aria-selected", x === t));
+  $("#paneLook").hidden = t.dataset.pane !== "look";
+  $("#panePost").hidden = t.dataset.pane !== "post";
+}));
+
+/* ---------- editor */
 async function openEditor(d) {
   state.current = d;
   const base = `/media/${d.status}/${encodeURIComponent(d.name)}`;
@@ -388,15 +591,19 @@ async function openEditor(d) {
   $("#edMeta").textContent = [fmtLen(d.duration), pick, d.framing === "track" ? "Follows faces" : "Centre crop"]
     .filter(Boolean).join(", ");
   $("#edVideo").src = `${base}/reel.mp4?v=${state.bust}`;
+  $("#preview").style.backgroundImage = `url(${base}/clean.jpg)`;
   $("#edDownload").href = `${base}/reel.mp4`;
   $("#edDownload").setAttribute("download", `${d.name}.mp4`);
   $("#edHook").value = d.hook;
   $("#edOverlay").checked = d.show_hook || d.show_header;
   $("#edTags").value = d.hashtags;
-  setStyle(d.caption_style || "bold");
   $("#edCaption").textContent = d.caption || "No caption yet.";
   $("#edSave").disabled = !d.restylable || state.job.state === "running";
   $("#edSave").title = d.restylable ? "" : "This reel's source clip is missing, so it can't be re-rendered.";
+  look.value = { ...look.opts.defaults, ...(d.look || {}) };
+  state.sample = "";
+  setLook({}, { show: false });
+  setView("video");
 
   const review = $("#edReview");
   review.innerHTML = "";
@@ -414,7 +621,12 @@ async function openEditor(d) {
   tr.textContent = "Loading…";
   $("#editor").showModal();
   api(`/api/drafts/${d.status}/${encodeURIComponent(d.name)}/transcript`)
-    .then(r => (tr.textContent = r.text || "No speech in this reel."))
+    .then(r => {
+      tr.textContent = r.text || "No speech in this reel.";
+      // Preview with a real line from this reel rather than placeholder words
+      state.sample = (r.text || "").replace(/[^\w' ]+/g, " ").trim().split(/\s+/).slice(2, 5).join(" ");
+      renderPreview();
+    })
     .catch(() => (tr.textContent = "Transcript unavailable."));
 }
 
@@ -427,6 +639,7 @@ function closeEditor() {
 $("#edClose").addEventListener("click", closeEditor);
 $("#editor").addEventListener("cancel", e => { e.preventDefault(); closeEditor(); });
 $("#editor").addEventListener("click", e => { if (e.target === $("#editor")) closeEditor(); });
+window.addEventListener("resize", renderPreview);
 
 async function move(d, action, label) {
   try {
@@ -442,8 +655,9 @@ $("#edSave").addEventListener("click", async () => {
   try {
     await api(`/api/drafts/${d.status}/${encodeURIComponent(d.name)}/edit`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ hook: $("#edHook").value, hashtags: $("#edTags").value, caption_style: state.style,
-                             show_hook: $("#edOverlay").checked, show_header: $("#edOverlay").checked }),
+      body: JSON.stringify({ hook: $("#edHook").value, hashtags: $("#edTags").value,
+                             show_hook: $("#edOverlay").checked, show_header: $("#edOverlay").checked,
+                             ...lookPayload() }),
     });
     closeEditor();
     toast("Saved. Re-rendering now, this takes a minute or two.");
@@ -561,11 +775,11 @@ async function loadIdeas() {
   } catch { ul.innerHTML = `<li class="hint">Ideas unavailable.</li>`; }
 }
 
-// Deep link: #open=<status>/<draft name> opens that reel in the editor
-loadDrafts().then(() => {
-  const m = location.hash.match(/^#open=(\w+)\/(.+)$/);
+// Deep link: #open=<status>/<draft name> opens that reel in the editor (#open=...&look shows the Look preview)
+Promise.all([loadDrafts(), loadOptions()]).then(() => {
+  const m = location.hash.match(/^#open=(\w+)\/([^&]+)/);
   const d = m && state.drafts.find(x => x.status === m[1] && x.name === decodeURIComponent(m[2]));
-  if (d) openEditor(d);
+  if (d) openEditor(d).then(() => location.hash.includes("&look") && setView("preview"));
 });
 loadInbox();
 pollJob();

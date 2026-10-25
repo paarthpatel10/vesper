@@ -4,6 +4,12 @@ import unittest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+import json
+import shutil
+import tempfile
+from unittest import mock
+
+import framefluence.studio as studio
 from framefluence.studio import draft_dir, parse_range, safe_filename
 
 
@@ -27,6 +33,23 @@ class TestStudioServer(unittest.TestCase):
         self.assertIsNone(draft_dir("pending", "..\\secrets"))
         self.assertIsNone(draft_dir("elsewhere", "anything"))
         self.assertIsNone(draft_dir("pending", "does_not_exist"))
+
+    def test_update_meta_keeps_every_caption_style(self):
+        root = tempfile.mkdtemp()
+        try:
+            draft = os.path.join(root, "review", "d1")
+            os.makedirs(draft)
+            open(os.path.join(draft, "reel.mp4"), "wb").close()
+            with open(os.path.join(draft, "meta.json"), "w") as f:
+                json.dump({"caption_style": "bold"}, f)
+            with mock.patch.object(studio, "ROOT", root):
+                studio.update_meta("pending", "d1", {"caption_style": "karaoke", "caption_font": "anton",
+                                                     "hook": " Hi ", "evil": "x"})
+            meta = json.load(open(os.path.join(draft, "meta.json")))
+            self.assertEqual((meta["caption_style"], meta["caption_font"], meta["hook"]), ("karaoke", "anton", "Hi"))
+            self.assertNotIn("evil", meta)
+        finally:
+            shutil.rmtree(root)
 
 
 if __name__ == "__main__":
