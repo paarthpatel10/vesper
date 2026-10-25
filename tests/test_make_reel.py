@@ -128,6 +128,18 @@ class TestMakeReel(unittest.TestCase):
         self.assertIn("WEDNESDAY (2022) | DIR. TIM BURTON", cmd_str)
         self.assertIn("Montserrat", cmd_str)
 
+    def test_audio_is_loudness_normalised_by_default(self):
+        cmd = " ".join(build_ffmpeg_command(mode="quote", input_file="in.mp4", output_file="out.mp4"))
+        self.assertIn("-af loudnorm=I=-14:TP=-1.5:LRA=11 -ar 48000", cmd)
+        cmd = " ".join(build_ffmpeg_command(mode="split", top_file="a.mp4", bottom_file="b.mp4"))
+        self.assertIn("loudnorm=I=-14", cmd)
+        cmd = " ".join(build_ffmpeg_command(mode="quote", input_file="in.mp4", normalize_audio=False))
+        self.assertNotIn("loudnorm", cmd)
+
+    def test_gentle_colour_grade(self):
+        cmd = " ".join(build_ffmpeg_command(mode="quote", input_file="in.mp4"))
+        self.assertIn("eq=contrast=1.06:brightness=0.01:saturation=1.12", cmd)
+
 
 if __name__ == "__main__":
     unittest.main()

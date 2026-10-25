@@ -2,7 +2,7 @@
 
 Turn long videos into polished Shorts and Reels, automatically.
 
-Vesper powers the [@framefluence](https://instagram.com/framefluence) cinema page, and its Python package is named `framefluence`. Drop in an episode and it finds the strongest scenes, cuts each one into a 9:16 reel under two minutes, keeps the speaker in frame, adds bold word-by-word captions, and writes the post caption. You review the drafts in a local web studio and post the ones you like.
+Vesper powers the [@framefluence](https://instagram.com/framefluence) cinema page, and its Python package is named `framefluence`. Drop in an episode and it finds the strongest scenes, cuts each one into a 9:16 reel (one minute by default, anywhere from 30 seconds to just under two), keeps the speaker in frame, adds bold word-by-word captions, and writes the post caption. You review the drafts in a local web studio and post the ones you like.
 
 ## What it does
 
@@ -49,12 +49,13 @@ Or from the command line:
 
 ```bash
 python -m framefluence autopilot                 # every video in inbox/ becomes drafts in review/
-python -m framefluence autopilot --drafts 2 --max-len 90
+python -m framefluence autopilot --drafts 2 --max-len 45
 python -m framefluence autopilot --restyle review/<draft>   # re-render one draft with current styling
 python -m framefluence review                    # list drafts, then: open | approve | reject <name>
 python -m framefluence reel --help               # render a single reel by hand
 python -m framefluence trends --briefing-only    # today's post ideas
 python -m framefluence calendar                  # rebuild data/top_50_actors_calendar.csv
+python -m framefluence script guide.md --dry-run # plan clips from a scripts guide, then run without --dry-run
 ```
 
 To pick an exact scene instead of letting the autopilot choose, put a JSON file next to the video in `inbox/` with the same name:
@@ -69,6 +70,8 @@ To pick an exact scene instead of letting the autopilot choose, put a JSON file 
   "end": 1283.24
 }
 ```
+
+To cut a whole list of planned clips, write a scripts guide in Markdown. Under `## Episode N: Title (Season S, Episode E)`, add `### Clip N.M: Title` sections, each with a `START DIALOGUE` line, an `END DIALOGUE` line and the dialogue. Put the episode files in `assets/footage/`. `python -m framefluence script <guide.md>` finds each line in the episode's subtitles, cuts on shot changes and renders every clip as a draft.
 
 Run it daily on Windows with `powershell -ExecutionPolicy Bypass -File scripts\schedule_autopilot.ps1 -Time 09:00`.
 
@@ -85,7 +88,7 @@ framefluence/        the Python package
   studio.py, ui/     local web studio
   trend_agent.py     post ideas and captions
 data/                actor calendar and peer benchmarks
-assets/fonts/        caption fonts (SIL Open Font License / Apache 2.0; licences in assets/fonts/licenses/)
+assets/fonts/        caption fonts (SIL Open Font License / Apache 2.0; licences in assets/font-licenses/)
 models/              YuNet face detection model (OpenCV Zoo)
 scripts/             Windows scheduler
 tests/               python -m unittest discover tests
@@ -104,4 +107,4 @@ The end-to-end test renders a short synthetic clip, so it needs FFmpeg.
 
 ## A note on footage
 
-This repository contains no film or TV footage, and `.gitignore` keeps video files out of it. Use clips you have the rights to share. Reposting copyrighted scenes can get posts removed or muted.
+This repository contains no film or TV footage, and `.gitignore` keeps video files out of it. Use clips you have the rights to share. Studios register their shows with YouTube Content ID and Meta Rights Manager, and long excerpts are often blocked worldwide, muted or removed. That's why reels default to one minute, with 30 and 45 second options. Shorter clips are matched less often, but no length is guaranteed safe, and claimed clips usually can't earn money. Adding your own commentary or analysis is the most reliable way to stay on the right side of fair use.

@@ -42,6 +42,7 @@ python -m framefluence reel --mode quote -i clip.mp4 -o output/reel.mp4 --subtit
 python -m framefluence reel --mode quote -i clip.mp4 --framing track   # face-tracked crop (needs .venv)
 python -m framefluence trends --briefing-only          # without the flag it waits for input()
 python -m framefluence calendar                        # regenerate data/top_50_actors_calendar.csv
+.venv/Scripts/python -m framefluence script <guide.md> [--dry-run] [--clips 1.7,3.5] [--episodes 2]   # batch shorts from a scripts guide
 powershell -ExecutionPolicy Bypass -File scripts/schedule_autopilot.ps1 -Time 09:00   # daily Task Scheduler job
 ```
 
@@ -55,6 +56,7 @@ powershell -ExecutionPolicy Bypass -File scripts/schedule_autopilot.ps1 -Time 09
 - **Post caption:** the quote is the sidecar `quote`, else `payoff_line()` (the beat's last sentence, so each automatic beat gets its own punchline). Sidecar `hashtags` are put before the base tags. Automatic beats get no per-scene hook; a person writes it in `meta.json`.
 - **Flow:** `process_clip` calls `analyse_source` (shots plus a cheap *picking* transcript), then `pick_segments`, then `render_draft` once per segment.
   - **Picking transcript:** the embedded subtitle track (`embedded_subtitle_words`, instant, approximate per-word times) if the file has one, else Whisper `tiny`.
+  - **Length:** `--max-len` defaults to **60s**, and the Studio offers 30/45/60/90/118s with 60 preselected. A 1:58 Friends reel was blocked globally on YouTube Shorts by a Content ID length limit, so keep defaults short. `pick_segments` uses `min_len = min(60, max_len - 15)`.
   - **Segments and drafts:** a long source such as an episode becomes the top `--drafts` (default 3) non-overlapping story beats, as `review/<date>_<slug>_beat<k>/`. A sidecar `start`/`end` gives exactly one draft.
   - **Per draft:** cut to `source_cut.mp4` (timestamps restart at 0; shots shifted by `relative_scenes`), then Whisper `--whisper-model` on **the cut only**.
     - **Embedded subtitles present:** `align_reference()` keeps the subtitle track's exact wording and borrows Whisper's word timings (difflib match; unmatched words are interpolated between neighbours). Whisper alone mishears names ("Rach" → "reach"), and its VAD drops soft emotional lines.
@@ -77,6 +79,14 @@ powershell -ExecutionPolicy Bypass -File scripts/schedule_autopilot.ps1 -Time 09
   - The highlight is tagged **by position**; `subtitle_engine`'s `highlight_word` uses `str.replace` and would light up every repeated word.
   - Write ASS override tags as raw strings (`r"{\fscx80}"`). In plain strings, `\f` is a form-feed and `\N` is a syntax error.
   - Caption styling costs almost no render time; benchmarks run at about 1x realtime with or without captions.
+
+### Scripts guides: `framefluence/script_clips.py`
+- A guide is Markdown: `## Episode N: Title (Season S, Episode E)`, then `### Clip N.M: Title` blocks with `**START DIALOGUE (Cut In):** \`line\``, `**END DIALOGUE (Cut Out):** \`line\``, an optional teaser and `**Estimated Duration:**`, then the dialogue as `> **Name:** line`. `parse_guide()` reads it; the show name comes from the H1.
+- **Locating:** episode files are found in `assets/footage` by their `sXXeYY` code (`episode_file`). Lines are fuzzy-matched against the **embedded subtitle track** with `phrase_matches()` (difflib windows, because fan scripts and subtitles differ). `locate_clip()` tries every strong START candidate, since lines can recur in an episode, and pins the END with the clip's last ~12 dialogue words rather than a lone "What?!". The END must fall within `--max-span` (150s) of the START.
+- `snap_to_shots()` moves the cut-in back to a shot change within 1.2s and lets the cut-out run to the next shot change, but never into the next spoken word.
+- **Caching and reruns:** subtitle words and shot lists are cached in `cache/` (git-ignored; shot detection is about 2.5 min per episode). Drafts render through `autopilot.render_draft` as `review/<date>_<show>_sXXeYY_clip_N_M_<title>/` with `pick: "script"`. `existing_draft()` skips clips already rendered on any date, so an interrupted batch just re-runs.
+- **Real scenes outrun guide estimates.** On Friends S08E01–05, the guide said 40–60s but the actual dialogue spans were 41–132s, because of laughs and pauses. Always `--dry-run` first and check lengths against the copyright guidance above.
+- Some releases carry cover art as a second video stream, so `cut_clip` maps `0:v:0` and `0:a:0?` explicitly.
 
 ### Studio UI: `framefluence/studio.py` and `framefluence/ui/index.html`
 - **Server:** standard-library `ThreadingHTTPServer`, bound to `127.0.0.1` only, with no framework and no build step. The UI is one vanilla HTML/CSS/JS file, and Montserrat is served from `assets/fonts` via `/fonts/`.
@@ -105,6 +115,9 @@ powershell -ExecutionPolicy Bypass -File scripts/schedule_autopilot.ps1 -Time 09
 - **Split mode:** two 1080x960 halves `vstack`ed, watermark only, audio from the top clip.
 - **Mode rules:** hook and quote render only in `quote` mode, and `--quote` is skipped when `--subtitles` is given.
 - **Layout (y on 1920):** header 150 (34px), watermark 100 (or top-right 80 with a header, 28px), quote 1480. The hook box top is at 240, from the `.ass` file; the drawtext hook at 280 is used only when there are no subtitles. Captions sit at `margin_v` 560 from the bottom, above Instagram's UI.
+- **Audio and grade:** every render runs single-pass `loudnorm=I=-14:TP=-1.5:LRA=11` with `-ar 48000` (loudnorm otherwise outputs 192 kHz); `--no-loudnorm` or `normalize_audio=False` turns it off. `color_grade` applies light `unsharp` plus `eq=contrast=1.06:brightness=0.01:saturation=1.12`.
+- **Not anti-copyright tools:** the user asked for speed, pitch or background-music tweaks to avoid Content ID, and that was declined. Don't add features whose purpose is to defeat Content ID or Rights Manager matching.
+- **Font licences** live in `assets/font-licenses/`, not inside `assets/fonts/`. libass scans every entry in `fontsdir` and logs `fopen failed` for subfolders.
 - **Watermark placement:** `watermark_align`/`watermark_y` (CLI `--watermark-align`/`--watermark-y`) override the automatic spot (centre y=100, or top-right with a header).
 - **Escaping:** `drawtext` text has `'` replaced with `’` and `:` escaped to `\:`. Subtitle paths change `\` to `/` and escape `:`.
 - **Adding a CLI option:** update the signature, `argparse`, the explicit `convert_to_reel(...)` kwargs, `autopilot.process_clip` if relevant, and `trend_agent.generate_content_package`'s `suggested_command`, which must stay valid per mode.

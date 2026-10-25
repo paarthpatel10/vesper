@@ -41,7 +41,8 @@ def build_ffmpeg_command(
     zoom=1.125,
     track_x=None,  # crop x expression for "track" framing (see reframe.py)
     watermark_align=None,  # "left" | "center" | "right"; None keeps the automatic placement
-    watermark_y=None  # top of the watermark in px on the 1920 canvas
+    watermark_y=None,  # top of the watermark in px on the 1920 canvas
+    normalize_audio=True  # -14 LUFS: the loudness YouTube and Instagram normalise to
 ):
     if mode not in ["quote", "split", "clean"]:
         raise ValueError(f"Invalid mode: '{mode}'. Supported modes are: quote, split, clean")
@@ -50,7 +51,10 @@ def build_ffmpeg_command(
     font_bold = get_font_file(MONTSERRAT_BOLD)
 
     # Cinema color grading filter string
-    grade_filter = "unsharp=lx=5:ly=5:la=1.2:cx=5:cy=5:ca=0.0,eq=contrast=1.12:brightness=-0.02:saturation=1.15"
+    # Gentle cinema grade: light sharpening, a touch more contrast and colour
+    grade_filter = "unsharp=lx=5:ly=5:la=1.2:cx=5:cy=5:ca=0.0,eq=contrast=1.06:brightness=0.01:saturation=1.12"
+    # Single-pass loudness normalisation; -ar pins 48 kHz (loudnorm otherwise upsamples to 192 kHz)
+    audio_args = ["-af", "loudnorm=I=-14:TP=-1.5:LRA=11", "-ar", "48000"] if normalize_audio else []
 
     if mode in ["quote", "clean"]:
         if not input_file:
@@ -170,6 +174,7 @@ def build_ffmpeg_command(
             "-c:v", "libx264",
             "-preset", "fast",
             "-crf", "19",
+            *audio_args,
             "-c:a", "aac",
             "-b:a", "192k",
             output_file
@@ -212,6 +217,7 @@ def build_ffmpeg_command(
             "-c:v", "libx264",
             "-preset", "fast",
             "-crf", "19",
+            *audio_args,
             "-c:a", "aac",
             "-b:a", "192k",
             output_file
@@ -248,6 +254,8 @@ def main():
     parser.add_argument("--zoom", type=float, default=1.125, help="Cinema zoom factor for full_bleed framing")
     parser.add_argument("--watermark-align", choices=["left", "center", "right"], help="Watermark horizontal placement")
     parser.add_argument("--watermark-y", type=int, help="Watermark top edge in px (0-1920)")
+    parser.add_argument("--no-loudnorm", dest="normalize_audio", action="store_false",
+                        help="Keep the original audio level (default: normalise to -14 LUFS)")
 
     args = parser.parse_args()
 
@@ -278,7 +286,8 @@ def main():
         zoom=args.zoom,
         track_x=track_x,
         watermark_align=args.watermark_align,
-        watermark_y=args.watermark_y
+        watermark_y=args.watermark_y,
+        normalize_audio=args.normalize_audio
     )
 
 if __name__ == "__main__":
