@@ -70,6 +70,15 @@ class TestLook(unittest.TestCase):
         self.assertTrue(look["punch_zoom"])
         self.assertEqual(look["music_track"], "")
 
+    def test_render_switches_and_pipeline_defaults(self):
+        clean = sanitize({"color_grade": 0, "normalize_audio": 1, "punch_zoom_amount": 0.5,
+                          "max_len": "45", "drafts": 9})
+        self.assertEqual(clean, {"color_grade": False, "normalize_audio": True, "punch_zoom_amount": 0.2,
+                                 "max_len": 45})               # 9 reels per video isn't offered, so dropped
+        look = full_look({})
+        self.assertEqual((look["color_grade"], look["normalize_audio"], look["punch_zoom_amount"]), (True, True, 0.08))
+        self.assertNotIn("max_len", look)                      # pipeline settings aren't per-reel look
+
 
 if __name__ == "__main__":
     unittest.main()

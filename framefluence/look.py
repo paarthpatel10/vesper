@@ -18,6 +18,13 @@ SPEEDS = (1.0, 1.05, 1.1, 1.15, 1.2, 1.25)
 # House defaults for every new reel: 10% faster pacing and the punchline push-in
 DEFAULT_PLAYBACK = {"playback_speed": 1.1, "punch_zoom": True, "music_track": ""}
 MUSIC_EXTS = (".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac")
+# Render switches, per reel: the gentle grade, -14 LUFS loudness and how far the punchline zooms
+DEFAULT_RENDER = {"color_grade": True, "normalize_audio": True, "punch_zoom_amount": 0.08}
+# Pipeline defaults, settings-only: how long new reels may be and how many come from one video
+LENGTHS = (30, 45, 60, 90, 118)
+DRAFT_COUNTS = (1, 2, 3, 4, 5)
+DEFAULT_PIPELINE = {"max_len": 60, "drafts": 3}
+LOOK_KEYS = tuple(DEFAULT_LOOK) + tuple(DEFAULT_WATERMARK) + tuple(DEFAULT_PLAYBACK) + tuple(DEFAULT_RENDER)
 
 
 def music_tracks():
@@ -25,7 +32,6 @@ def music_tracks():
     if not os.path.isdir(MUSIC):
         return []
     return sorted(f for f in os.listdir(MUSIC) if f.lower().endswith(MUSIC_EXTS))
-LOOK_KEYS = tuple(DEFAULT_LOOK) + tuple(DEFAULT_WATERMARK) + tuple(DEFAULT_PLAYBACK)
 
 
 def _fraction(value, low, high):
@@ -43,12 +49,20 @@ def sanitize(fields):
         clean["watermark_align"] = fields["watermark_align"]
     if "show_watermark" in fields:
         clean["show_watermark"] = bool(fields["show_watermark"])
-    if "punch_zoom" in fields:
-        clean["punch_zoom"] = bool(fields["punch_zoom"])
+    for key in ("punch_zoom", "color_grade", "normalize_audio"):
+        if key in fields:
+            clean[key] = bool(fields[key])
+    try:
+        if "max_len" in fields and int(float(fields["max_len"])) in LENGTHS:
+            clean["max_len"] = int(float(fields["max_len"]))
+        if "drafts" in fields and int(float(fields["drafts"])) in DRAFT_COUNTS:
+            clean["drafts"] = int(float(fields["drafts"]))
+    except (TypeError, ValueError):
+        pass
     if "music_track" in fields and (fields["music_track"] in music_tracks() or fields["music_track"] in ("", None)):
         clean["music_track"] = fields["music_track"] or ""
     for key, low, high in (("caption_position", 0.1, 0.95), ("watermark_position", 0.0, 0.97),
-                           ("playback_speed", 0.75, 1.5)):
+                           ("playback_speed", 0.75, 1.5), ("punch_zoom_amount", 0.02, 0.2)):
         try:
             if key in fields:
                 clean[key] = round(_fraction(fields[key], low, high), 3)
@@ -74,7 +88,7 @@ def resolve_watermark(meta):
 def full_look(meta):
     """Every look key with defaults filled in: what the Studio shows and the render uses."""
     look = resolve_look(meta)
-    for key, value in {**DEFAULT_WATERMARK, **DEFAULT_PLAYBACK}.items():
+    for key, value in {**DEFAULT_WATERMARK, **DEFAULT_PLAYBACK, **DEFAULT_RENDER}.items():
         look[key] = meta.get(key, value)
     return {**look, **sanitize(meta)}
 
@@ -86,6 +100,19 @@ def load_defaults():
             return sanitize(json.load(f))
     except (OSError, ValueError):
         return {}
+
+
+def pipeline_defaults():
+    """Default reel length and reels per video: house values overridden by the saved settings."""
+    saved = load_defaults()
+    return {k: saved.get(k, v) for k, v in DEFAULT_PIPELINE.items()}
+
+
+def reset_defaults():
+    """Forgets the user's saved settings, so everything falls back to the house defaults."""
+    if os.path.exists(SETTINGS):
+        os.remove(SETTINGS)
+    return options()["defaults"]
 
 
 def save_defaults(fields):
@@ -105,6 +132,9 @@ def options():
         "colors": [{"id": k, "label": v["label"], "hex": v["hex"]} for k, v in COLORS.items()],
         "sizes": SIZES,
         "speeds": SPEEDS,
+        "lengths": LENGTHS,
+        "draft_counts": DRAFT_COUNTS,
         "music": music_tracks(),
-        "defaults": {**DEFAULT_LOOK, **DEFAULT_WATERMARK, **DEFAULT_PLAYBACK, **load_defaults()},
+        "defaults": {**DEFAULT_LOOK, **DEFAULT_WATERMARK, **DEFAULT_PLAYBACK, **DEFAULT_RENDER,
+                     **DEFAULT_PIPELINE, **load_defaults()},
     }

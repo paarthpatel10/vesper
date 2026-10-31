@@ -261,6 +261,8 @@ def finish_draft(work, clip, meta, words, framing, track_x, start, end, source, 
         quote_text=meta.get("quote") if not subtitle_file else None,
         subtitle_file=os.path.relpath(subtitle_file, ROOT) if subtitle_file else None,
         framing=framing, track_x=track_x,
+        color_grade=look.get("color_grade", True), normalize_audio=look.get("normalize_audio", True),
+        punch_zoom_amount=look.get("punch_zoom_amount", 0.08),
         watermark=watermark, watermark_align=watermark_align, watermark_y=watermark_y,
         speed=look.get("playback_speed", 1.0),
         punch_zoom_at=(end - start - 2.0) if look.get("punch_zoom", True) and end - start > 6 else None,
@@ -353,9 +355,11 @@ def main():
     parser.add_argument("--no-subs", action="store_true", help="Skip auto-subtitles")
     parser.add_argument("--no-briefing", action="store_true", help="Skip writing the daily trend briefing")
     parser.add_argument("--whisper-model", default="small", help="faster-whisper model (tiny/base/small/medium)")
-    parser.add_argument("--max-len", type=float, default=60.0,
-                        help="Longest reel in seconds (default 60: rights holders often block longer excerpts)")
-    parser.add_argument("--drafts", type=int, default=3, help="Drafts per long source (top-ranked story beats)")
+    parser.add_argument("--max-len", type=float,
+                        help="Longest reel in seconds (default: Studio settings, else 60; rights holders "
+                             "often block longer excerpts)")
+    parser.add_argument("--drafts", type=int,
+                        help="Drafts per long source (default: Studio settings, else 3)")
     parser.add_argument("--restyle", nargs="+", metavar="DRAFT", help="Re-render review/ drafts with current styling")
     parser.add_argument("--style", choices=["bold", "clean"], help="Caption style for --restyle (default: draft's own)")
     args = parser.parse_args()
@@ -370,6 +374,10 @@ def main():
     )
     load_env()
     day = datetime.date.today().isoformat()
+    from framefluence.look import pipeline_defaults
+    defaults = pipeline_defaults()
+    max_len = args.max_len or float(defaults["max_len"])
+    drafts = args.drafts or int(defaults["drafts"])
 
     if args.restyle:
         for draft in args.restyle:
@@ -390,8 +398,7 @@ def main():
         try:
             process_clip(os.path.join(INBOX, name), day, use_cut=not args.no_cut,
                          use_track=not args.no_track, use_subs=not args.no_subs,
-                         whisper_model=args.whisper_model, max_len=args.max_len,
-                         drafts=args.drafts)
+                         whisper_model=args.whisper_model, max_len=max_len, drafts=drafts)
         except Exception:
             failures += 1
             log.exception("Failed on %s (left in inbox)", name)

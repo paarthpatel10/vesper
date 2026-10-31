@@ -358,6 +358,9 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if parts == ["api", "upload"]:
                 return self.upload(urllib.parse.parse_qs(url.query))
+            if parts == ["api", "settings", "reset"]:
+                from framefluence.look import reset_defaults
+                return self.send_json({"ok": True, "defaults": reset_defaults()})
             if parts == ["api", "settings"]:
                 from framefluence.look import save_defaults
                 return self.send_json({"ok": True, "defaults": save_defaults(self.read_body_json())})
