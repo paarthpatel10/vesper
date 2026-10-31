@@ -51,6 +51,19 @@ class TestStudioServer(unittest.TestCase):
         finally:
             shutil.rmtree(root)
 
+    def test_unfinished_draft_is_hidden(self):
+        root = tempfile.mkdtemp()
+        try:
+            draft = os.path.join(root, "review", "half")
+            os.makedirs(draft)
+            open(os.path.join(draft, "reel.mp4"), "wb").close()     # interrupted: no meta.json yet
+            with mock.patch.object(studio, "ROOT", root):
+                self.assertIsNone(draft_dir("pending", "half"))
+                open(os.path.join(draft, "meta.json"), "w").write("{}")
+                self.assertIsNotNone(draft_dir("pending", "half"))
+        finally:
+            shutil.rmtree(root)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -281,14 +281,24 @@ def build_ffmpeg_command(
         return cmd
 
 def convert_to_reel(**kwargs):
-    cmd = build_ffmpeg_command(**kwargs)
+    """
+    Renders to "<name>.part.mp4" and renames it into place only when FFmpeg succeeds, so an
+    interrupted render (a closed session, a crash) never leaves a truncated, unplayable reel.
+    """
+    final = kwargs.get("output_file", "reel_output.mp4")
+    stem, ext = os.path.splitext(final)
+    partial = f"{stem}.part{ext or '.mp4'}"
+    cmd = build_ffmpeg_command(**{**kwargs, "output_file": partial})
     print(f"[*] Executing FFmpeg command...")
     try:
         subprocess.run(cmd, check=True)
-        print(f"[+] Reel successfully generated: {kwargs.get('output_file', 'output.mp4')}")
+        os.replace(partial, final)
+        print(f"[+] Reel successfully generated: {final}")
         return True
     except subprocess.CalledProcessError as e:
         print(f"[-] FFmpeg error: {e}")
+        if os.path.exists(partial):
+            os.remove(partial)
         return False
 
 def main():

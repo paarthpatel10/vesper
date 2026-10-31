@@ -237,7 +237,7 @@ def existing_draft(show, clip):
     pattern = os.path.basename(draft_dir(show, clip, "*"))
     for folder in (REVIEW, os.path.join(ROOT, "approved"), os.path.join(ROOT, "rejected")):
         for path in glob.glob(os.path.join(folder, pattern)):
-            if os.path.exists(os.path.join(path, "reel.mp4")):
+            if all(os.path.exists(os.path.join(path, f)) for f in ("reel.mp4", "meta.json")):
                 return path
     return None
 

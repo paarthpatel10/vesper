@@ -181,6 +181,29 @@ class TestMakeReel(unittest.TestCase):
     def test_subtle_sharpening(self):
         self.assertIn("unsharp=3:3:0.5,eq=", " ".join(build_ffmpeg_command(mode="quote", input_file="in.mp4")))
 
+    def test_failed_render_leaves_no_reel_behind(self):
+        import subprocess, tempfile
+        from unittest import mock
+        from framefluence.make_reel import convert_to_reel
+        out = os.path.join(tempfile.mkdtemp(), "reel.mp4")
+
+        def fake_ffmpeg(cmd, check):
+            open(cmd[-1], "wb").write(b"half a video")      # FFmpeg dies mid-write
+            raise subprocess.CalledProcessError(1, cmd)
+        with mock.patch("framefluence.make_reel.subprocess.run", side_effect=fake_ffmpeg):
+            self.assertFalse(convert_to_reel(mode="quote", input_file="in.mp4", output_file=out))
+        self.assertEqual(os.listdir(os.path.dirname(out)), [])  # neither reel.mp4 nor the .part file
+
+    def test_successful_render_is_renamed_into_place(self):
+        import tempfile
+        from unittest import mock
+        from framefluence.make_reel import convert_to_reel
+        out = os.path.join(tempfile.mkdtemp(), "reel.mp4")
+        with mock.patch("framefluence.make_reel.subprocess.run",
+                        side_effect=lambda cmd, check: open(cmd[-1], "wb").write(b"video")):
+            self.assertTrue(convert_to_reel(mode="quote", input_file="in.mp4", output_file=out))
+        self.assertEqual(os.listdir(os.path.dirname(out)), ["reel.mp4"])
+
 
 if __name__ == "__main__":
     unittest.main()

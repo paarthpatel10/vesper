@@ -380,9 +380,17 @@ def main():
     drafts = args.drafts or int(defaults["drafts"])
 
     if args.restyle:
+        failed = []
         for draft in args.restyle:
-            restyle_draft(os.path.abspath(draft), style=args.style)
-        return 0
+            try:
+                restyle_draft(os.path.abspath(draft), style=args.style)
+            except Exception:
+                # One broken draft (e.g. half-written by an interrupted render) shouldn't stop the rest
+                log.exception("Restyle failed for %s", draft)
+                failed.append(draft)
+        if failed:
+            log.warning("%d of %d restyles failed: %s", len(failed), len(args.restyle), ", ".join(failed))
+        return 1 if failed else 0
 
     if not args.no_briefing:
         try:

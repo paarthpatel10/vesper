@@ -47,7 +47,9 @@ def draft_dir(status, name):
     if status not in STATUS_DIRS or not DRAFT_NAME.match(name or ""):
         return None
     path = os.path.join(ROOT, STATUS_DIRS[status], name)
-    return path if os.path.isfile(os.path.join(path, "reel.mp4")) else None
+    # meta.json is written last, so a folder without it is an unfinished (interrupted) render
+    complete = all(os.path.isfile(os.path.join(path, f)) for f in ("reel.mp4", "meta.json"))
+    return path if complete else None
 
 
 def read_json(path, default):
