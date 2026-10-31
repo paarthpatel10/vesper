@@ -42,7 +42,14 @@ def build_ffmpeg_command(
     track_x=None,  # crop x expression for "track" framing (see reframe.py)
     watermark_align=None,  # "left" | "center" | "right"; None keeps the automatic placement
     watermark_y=None,  # top of the watermark in px on the 1920 canvas
-    normalize_audio=True  # -14 LUFS: the loudness YouTube and Instagram normalise to
+    normalize_audio=True,  # -14 LUFS: the loudness YouTube and Instagram normalise to
+    speed=1.0,  # playback speed (1.1 = 10% faster); audio keeps its natural pitch via atempo
+    punch_zoom_at=None,  # seconds (original timeline) where a slow push-in on the speaker starts
+    punch_zoom_amount=0.08,  # 0.08 = ends at 108%
+    punch_zoom_seconds=2.0,
+    fps="30",  # source frame rate (e.g. "24000/1001"), needed by the zoom
+    music_file=None,  # optional licensed/royalty-free track mixed under the dialogue
+    music_db=-28.0  # bed level; it is also ducked whenever someone speaks
 ):
     if mode not in ["quote", "split", "clean"]:
         raise ValueError(f"Invalid mode: '{mode}'. Supported modes are: quote, split, clean")
@@ -50,11 +57,36 @@ def build_ffmpeg_command(
     ffmpeg_bin = "ffmpeg"
     font_bold = get_font_file(MONTSERRAT_BOLD)
 
-    # Cinema color grading filter string
-    # Gentle cinema grade: light sharpening, a touch more contrast and colour
-    grade_filter = "unsharp=lx=5:ly=5:la=1.2:cx=5:cy=5:ca=0.0,eq=contrast=1.06:brightness=0.01:saturation=1.12"
-    # Single-pass loudness normalisation; -ar pins 48 kHz (loudnorm otherwise upsamples to 192 kHz)
-    audio_args = ["-af", "loudnorm=I=-14:TP=-1.5:LRA=11", "-ar", "48000"] if normalize_audio else []
+    # Gentle cinema grade: subtle sharpening, a touch more contrast and colour
+    grade_filter = "unsharp=3:3:0.5,eq=contrast=1.06:brightness=0.01:saturation=1.12"
+    speed = float(speed or 1.0)
+    if not 0.5 <= speed <= 2.0:
+        raise ValueError(f"speed must be between 0.5 and 2.0, got {speed}")
+    # atempo changes speed without changing pitch; then single-pass loudness normalisation,
+    # with -ar pinning 48 kHz (loudnorm otherwise upsamples to 192 kHz)
+    audio_filters = [f"atempo={speed:g}"] if speed != 1.0 else []
+    if normalize_audio:
+        audio_filters.append("loudnorm=I=-14:TP=-1.5:LRA=11")
+    audio_args = ["-af", ",".join(audio_filters)] if audio_filters else []
+    if normalize_audio:
+        audio_args += ["-ar", "48000"]
+
+    def audio_section(music_index):
+        """
+        (extra input args, filtergraph suffix, map/codec args) for the audio. Without music it is a
+        plain -af chain. With music the bed is looped, lowered to music_db, ducked under the dialogue
+        with sidechaincompress, mixed in, and then sped/normalised inside the filtergraph (FFmpeg
+        refuses -af on a stream fed by -filter_complex).
+        """
+        if not music_file:
+            return [], "", ["-map", "0:a?", *audio_args]
+        tail = ("," + ",".join(audio_filters)) if audio_filters else ""
+        graph = (f";[0:a]asplit=2[a_dlg][a_sc]"
+                 f";[{music_index}:a]volume={music_db:g}dB[a_bed0]"
+                 f";[a_bed0][a_sc]sidechaincompress=threshold=0.02:ratio=8:attack=20:release=400[a_bed]"
+                 f";[a_dlg][a_bed]amix=inputs=2:duration=first:normalize=0{tail}[a_out]")
+        rate = ["-ar", "48000"] if normalize_audio else []
+        return ["-stream_loop", "-1", "-i", music_file], graph, ["-map", "[a_out]", *rate]
 
     if mode in ["quote", "clean"]:
         if not input_file:
@@ -104,6 +136,20 @@ def build_ffmpeg_command(
             raise ValueError(f"Unknown framing option: '{framing}'. Choose 'full_bleed', 'matte', 'blur', or 'track'")
 
         last_stream = "v1"
+
+        # Punchline push-in: the last seconds slowly zoom 100% -> 100+amount%, eased (smoothstep),
+        # toward the upper-middle where the tracked face sits. Applied before any text so captions
+        # and the watermark stay still. The tail is upscaled 2x so zoompan's integer steps don't jitter.
+        if punch_zoom_at is not None and float(punch_zoom_at) > 0:
+            t0, secs = float(punch_zoom_at), float(punch_zoom_seconds)
+            ease = f"min(1,it/{secs:g})"
+            z = f"1+{float(punch_zoom_amount):g}*(3*pow({ease},2)-2*pow({ease},3))"
+            filters.append(f"[{last_stream}]split[pz_a][pz_b]")
+            filters.append(f"[pz_a]trim=end={t0:.3f},setpts=PTS-STARTPTS[pz_head]")
+            filters.append(f"[pz_b]trim=start={t0:.3f},setpts=PTS-STARTPTS,scale=2160:3840,"
+                           f"zoompan=z='{z}':x='iw/2-iw/zoom/2':y='(ih-ih/zoom)*0.4':d=1:s=1080x1920:fps={fps}[pz_tail]")
+            filters.append("[pz_head][pz_tail]concat=n=2:v=1:a=0[v_pz]")
+            last_stream = "v_pz"
 
         # Minimalist Film Header Tag (e.g., "WEDNESDAY (2022) | DIR. TIM BURTON")
         if header_text:
@@ -162,19 +208,24 @@ def build_ffmpeg_command(
             filters.append(f"[{last_stream}]subtitles='{clean_sub_path}':fontsdir='assets/fonts'[v_sub]")
             last_stream = "v_sub"
 
-        filter_complex = ";".join(filters)
+        if speed != 1.0:
+            # Last in the chain: captions and the crop expression run on the original timeline
+            filters.append(f"[{last_stream}]setpts=PTS/{speed:g}[v_speed]")
+            last_stream = "v_speed"
+        music_inputs, audio_graph, audio_map = audio_section(1)
+        filter_complex = ";".join(filters) + audio_graph
 
         cmd = [
             ffmpeg_bin,
             "-y",
             "-i", input_file,
+            *music_inputs,
             "-filter_complex", filter_complex,
             "-map", f"[{last_stream}]",
-            "-map", "0:a?",
+            *audio_map,
             "-c:v", "libx264",
             "-preset", "fast",
             "-crf", "19",
-            *audio_args,
             "-c:a", "aac",
             "-b:a", "192k",
             output_file
@@ -204,20 +255,25 @@ def build_ffmpeg_command(
             )
             last_stream = "v_wm"
 
-        filter_complex = ";".join(filters)
+        if speed != 1.0:
+            # Last in the chain: captions and the crop expression run on the original timeline
+            filters.append(f"[{last_stream}]setpts=PTS/{speed:g}[v_speed]")
+            last_stream = "v_speed"
+        music_inputs, audio_graph, audio_map = audio_section(2)
+        filter_complex = ";".join(filters) + audio_graph
 
         cmd = [
             ffmpeg_bin,
             "-y",
             "-i", top_file,
             "-i", bottom_file,
+            *music_inputs,
             "-filter_complex", filter_complex,
             "-map", f"[{last_stream}]",
-            "-map", "0:a?",
+            *audio_map,
             "-c:v", "libx264",
             "-preset", "fast",
             "-crf", "19",
-            *audio_args,
             "-c:a", "aac",
             "-b:a", "192k",
             output_file
@@ -254,6 +310,11 @@ def main():
     parser.add_argument("--zoom", type=float, default=1.125, help="Cinema zoom factor for full_bleed framing")
     parser.add_argument("--watermark-align", choices=["left", "center", "right"], help="Watermark horizontal placement")
     parser.add_argument("--watermark-y", type=int, help="Watermark top edge in px (0-1920)")
+    parser.add_argument("--speed", type=float, default=1.1, help="Playback speed, 0.5-2.0 (default 1.1; 1 = original); pitch is preserved")
+    parser.add_argument("--punch-zoom-at", type=float, help="Start a 2s 100->108%% push-in at this time (seconds)")
+    parser.add_argument("--fps", default="30", help="Source frame rate for the zoom, e.g. 24000/1001")
+    parser.add_argument("--music", dest="music_file", help="Licensed/royalty-free track to mix under the dialogue")
+    parser.add_argument("--music-db", type=float, default=-28.0, help="Music bed level in dB (default -28)")
     parser.add_argument("--no-loudnorm", dest="normalize_audio", action="store_false",
                         help="Keep the original audio level (default: normalise to -14 LUFS)")
 
@@ -287,7 +348,12 @@ def main():
         track_x=track_x,
         watermark_align=args.watermark_align,
         watermark_y=args.watermark_y,
-        normalize_audio=args.normalize_audio
+        normalize_audio=args.normalize_audio,
+        speed=args.speed,
+        punch_zoom_at=args.punch_zoom_at,
+        fps=args.fps,
+        music_file=args.music_file,
+        music_db=args.music_db
     )
 
 if __name__ == "__main__":

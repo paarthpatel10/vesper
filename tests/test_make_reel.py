@@ -140,6 +140,47 @@ class TestMakeReel(unittest.TestCase):
         cmd = " ".join(build_ffmpeg_command(mode="quote", input_file="in.mp4"))
         self.assertIn("eq=contrast=1.06:brightness=0.01:saturation=1.12", cmd)
 
+    def test_playback_speed_is_applied_last_and_keeps_pitch(self):
+        cmd = build_ffmpeg_command(mode="quote", input_file="in.mp4", subtitle_file="s.ass", speed=1.1)
+        graph = cmd[cmd.index("-filter_complex") + 1]
+        self.assertTrue(graph.endswith("setpts=PTS/1.1[v_speed]"))  # after captions, so they stay in sync
+        self.assertIn("[v_speed]", cmd)
+        self.assertIn("atempo=1.1,loudnorm=I=-14", " ".join(cmd))    # tempo change without pitch change
+        split = " ".join(build_ffmpeg_command(mode="split", top_file="a.mp4", bottom_file="b.mp4", speed=1.1))
+        self.assertIn("setpts=PTS/1.1", split)
+
+    def test_normal_speed_adds_nothing(self):
+        cmd = " ".join(build_ffmpeg_command(mode="quote", input_file="in.mp4"))
+        self.assertNotIn("setpts", cmd)
+        self.assertNotIn("atempo", cmd)
+
+    def test_speed_out_of_range_is_rejected(self):
+        with self.assertRaises(ValueError):
+            build_ffmpeg_command(mode="quote", input_file="in.mp4", speed=3)
+
+    def test_punchline_zoom_runs_before_captions(self):
+        cmd = build_ffmpeg_command(mode="quote", input_file="in.mp4", subtitle_file="s.ass",
+                                   punch_zoom_at=30.0, fps="24000/1001")
+        graph = cmd[cmd.index("-filter_complex") + 1]
+        self.assertIn("[pz_a]trim=end=30.000", graph)
+        self.assertIn("zoompan=z='1+0.08*", graph)
+        self.assertIn("fps=24000/1001", graph)
+        self.assertLess(graph.index("concat=n=2"), graph.index("subtitles="))  # captions don't zoom
+
+    def test_music_bed_is_ducked_under_dialogue(self):
+        cmd = build_ffmpeg_command(mode="quote", input_file="in.mp4", music_file="bed.mp3", speed=1.1)
+        joined = " ".join(cmd)
+        self.assertIn("-stream_loop -1 -i bed.mp3", joined)
+        graph = cmd[cmd.index("-filter_complex") + 1]
+        self.assertIn("[1:a]volume=-28dB", graph)
+        self.assertIn("sidechaincompress", graph)
+        self.assertIn("amix=inputs=2:duration=first:normalize=0,atempo=1.1,loudnorm", graph)
+        self.assertIn("[a_out]", cmd)
+        self.assertNotIn("-af", cmd)  # audio is filtered inside the graph instead
+
+    def test_subtle_sharpening(self):
+        self.assertIn("unsharp=3:3:0.5,eq=", " ".join(build_ffmpeg_command(mode="quote", input_file="in.mp4")))
+
 
 if __name__ == "__main__":
     unittest.main()
