@@ -10,6 +10,7 @@ Vesper powers the [@framefluence](https://instagram.com/framefluence) cinema pag
 - **Cuts on clean breaks.** Clips start and end on a pause that falls on a shot change, never mid-sentence.
 - **Follows faces.** Each shot gets a 9:16 crop centred on the main face (OpenCV YuNet).
 - **Captions every word.** Pick from six fonts (Montserrat, Anton, Bebas Neue, Archivo Black, Bangers, Luckiest Guy), five caption styles (bold, karaoke, boxed, clean, minimal), a highlight colour, a size and a position on screen. When the video has its own subtitle track, its exact wording is used with Whisper's timing.
+- **Polishes every reel by default.** Playback runs at 1.1× with natural pitch, the last 2 seconds slowly zoom in on the punchline, a gentle grade and sharpening are applied, and audio is normalised to −14 LUFS. An optional royalty-free music bed from `assets/music/` can sit under the dialogue. You can change any of it per reel in the Studio's Look tab.
 - **Places your watermark.** Show or hide `@framefluence` and put it left, centre or right, anywhere from top to bottom.
 - **Writes the post.** A caption with the hook, the scene's punchline, a question for comments and hashtags.
 - **Suggests what to post.** Upcoming actor birthdays, trending trailers and proven formats from similar pages.
