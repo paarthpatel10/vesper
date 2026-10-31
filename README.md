@@ -44,7 +44,7 @@ Always run commands from the repository root.
 python -m framefluence studio       # web studio at http://127.0.0.1:8765
 ```
 
-In the studio, drop a video on the left, press **Make reels**, then open a draft. The **Look** tab sets the font, caption style, colour, size and position, and where the watermark goes, with a live layout preview before you re-render. **Use as my default** makes new reels start with that look. The **Post** tab edits the hook, hashtags and caption text.
+In the studio, drop a video on the left, press **Make reels**, then open a draft. The **Look** tab sets the font, caption style, colour, size and position, and where the watermark goes, with a live layout preview before you re-render. **Use as my default** makes new reels start with that look. The **Settings** button in the header edits those defaults directly. It covers captions, watermark, speed, punchline zoom (and how strong it is), music, colour grade, loudness, the default reel length and reels per video, with **Reset to house defaults**. The **Post** tab edits the hook, hashtags and caption text.
 
 Or from the command line:
 
