@@ -205,7 +205,8 @@
 <div class="shell">
   <header class="top">
     <h1 class="wordmark">Framefluence <span>Studio</span></h1>
-    <div class="job-pill" id="jobPill" role="status" aria-live="polite"><span class="dot"></span><span id="jobText">Idle</span></div>
+    <button class="btn" id="settingsBtn" style="margin-left:auto">Settings</button>
+    <div class="job-pill" id="jobPill" role="status" aria-live="polite" style="margin-left:10px"><span class="dot"></span><span id="jobText">Idle</span></div>
   </header>
 
   <aside class="rail">
@@ -304,7 +305,12 @@
             <div class="seg" id="lkSpeeds" role="group" aria-label="Playback speed"></div>
             <p class="hint">Voices keep their natural pitch. Speed changes pacing only; it doesn't affect copyright matching.</p></div>
           <div class="group"><span class="label">Effects</span>
-            <label class="check"><input type="checkbox" id="lkZoom"> Slow zoom-in on the punchline (last 2 seconds)</label></div>
+            <label class="check"><input type="checkbox" id="lkZoom"> Slow zoom-in on the punchline (last 2 seconds)</label>
+            <div class="seg" id="lkZoomAmt" role="group" aria-label="Zoom strength">
+              <button type="button" data-amount="0.05">Subtle</button><button type="button" data-amount="0.08">Medium</button><button type="button" data-amount="0.12">Strong</button>
+            </div>
+            <label class="check"><input type="checkbox" id="lkGrade"> Colour grade (a touch more contrast and colour, light sharpening)</label>
+            <label class="check"><input type="checkbox" id="lkLoud"> Even out loudness to -14 LUFS (the level YouTube and Instagram expect)</label></div>
           <div class="group"><label class="label" for="lkMusic">Background music</label>
             <div class="field" style="margin:0"><select id="lkMusic"></select></div>
             <p class="hint" id="lkMusicHint"></p></div>
@@ -317,7 +323,16 @@
             </div>
             <div class="slider"><span>Top</span><input type="range" id="lkWmPos" min="0" max="97" step="1" aria-label="Watermark position"><span>Bottom</span></div>
           </div>
-          <div class="actions"><button class="btn" id="lkDefault">Use as my default for new reels</button></div>
+          <div class="group" id="lkPipeline" hidden><span class="label">New reels</span>
+            <div class="row">
+              <div class="field" style="margin:0"><label for="setLen">Longest reel</label><select id="setLen"></select></div>
+              <div class="field" style="margin:0"><label for="setDrafts">Reels per video</label><select id="setDrafts"></select></div>
+            </div>
+            <p class="hint">Used by Make reels, the daily autopilot and scripts-guide batches. Shorter reels are less likely to be blocked.</p></div>
+          <div class="actions">
+            <button class="btn" id="lkDefault">Use as my default for new reels</button>
+            <button class="btn" id="setReset" hidden>Reset to house defaults</button>
+          </div>
         </div>
 
         <div id="panePost" class="group" style="gap:14px" hidden>
@@ -504,6 +519,18 @@ async function loadOptions() {
   $("#lkMusicHint").textContent = look.opts.music.length
     ? "Mixed quietly under the dialogue and lowered whenever someone speaks. Only use tracks you have the rights to."
     : "Add licensed or royalty-free tracks to assets/music to choose one here.";
+  const fill = (sel, items, label) => {
+    $(sel).innerHTML = "";
+    for (const v of items) {
+      const o = document.createElement("option");
+      o.value = String(v); o.textContent = label(v);
+      $(sel).appendChild(o);
+    }
+  };
+  const lenLabel = v => (v < 60 ? `${v} sec` : v === 60 ? "1 min" : v === 90 ? "1.5 min" : "Under 2 min");
+  fill("#setLen", look.opts.lengths, lenLabel);
+  fill("#setDrafts", look.opts.draft_counts, v => String(v));
+  applyRailDefaults();
   $("#lkColors").innerHTML = "";
   for (const c of look.opts.colors) {
     const b = document.createElement("button");
@@ -520,6 +547,10 @@ $("#lkCapPos").addEventListener("input", e => setLook({ caption_position: e.targ
 $("#lkWmPos").addEventListener("input", e => setLook({ watermark_position: e.target.value / 100 }));
 $("#lkWmShow").addEventListener("change", e => setLook({ show_watermark: e.target.checked }));
 $("#lkZoom").addEventListener("change", e => setLook({ punch_zoom: e.target.checked }, { show: false }));
+document.querySelectorAll("#lkZoomAmt button").forEach(b => b.addEventListener("click",
+  () => setLook({ punch_zoom_amount: Number(b.dataset.amount) }, { show: false })));
+$("#lkGrade").addEventListener("change", e => setLook({ color_grade: e.target.checked }, { show: false }));
+$("#lkLoud").addEventListener("change", e => setLook({ normalize_audio: e.target.checked }, { show: false }));
 $("#lkMusic").addEventListener("change", e => setLook({ music_track: e.target.value }, { show: false }));
 
 function setLook(change, { show = true } = {}) {
@@ -536,6 +567,10 @@ function setLook(change, { show = true } = {}) {
   $("#lkWmPos").value = Math.round(v.watermark_position * 100);
   $("#lkWmShow").checked = !!v.show_watermark;
   $("#lkZoom").checked = v.punch_zoom !== false;
+  press("#lkZoomAmt button", "amount", String(Number(v.punch_zoom_amount || 0.08)));
+  document.querySelectorAll("#lkZoomAmt button").forEach(b => (b.disabled = v.punch_zoom === false));
+  $("#lkGrade").checked = v.color_grade !== false;
+  $("#lkLoud").checked = v.normalize_audio !== false;
   $("#lkMusic").value = v.music_track || "";
   $("#lkCapWarn").hidden = v.caption_position <= 0.82;
   document.querySelectorAll("#lkWmAlign button, #lkWmPos").forEach(el => (el.disabled = !v.show_watermark));
@@ -597,7 +632,8 @@ function lookPayload() {
            caption_size: v.caption_size, caption_position: v.caption_position, show_watermark: v.show_watermark,
            watermark_align: v.watermark_align, watermark_position: v.watermark_position,
            playback_speed: Number(v.playback_speed || 1), punch_zoom: v.punch_zoom !== false,
-           music_track: v.music_track || "" };
+           punch_zoom_amount: Number(v.punch_zoom_amount || 0.08), color_grade: v.color_grade !== false,
+           normalize_audio: v.normalize_audio !== false, music_track: v.music_track || "" };
 }
 
 $("#lkDefault").addEventListener("click", async () => {
@@ -615,8 +651,76 @@ document.querySelectorAll(".ed-tabs .tab").forEach(t => t.addEventListener("clic
   $("#panePost").hidden = t.dataset.pane !== "post";
 }));
 
+/* ---------- settings: the editor in "defaults" mode */
+function applyRailDefaults() {
+  const d = look.opts.defaults;
+  $("#optLen").value = String(d.max_len);
+  $("#optDrafts").value = String(d.drafts);
+}
+
+function setMode(mode) {
+  state.mode = mode;
+  const defaults = mode === "defaults";
+  $(".ed-video .seg").hidden = defaults;
+  $(".ed-tabs").hidden = defaults;
+  $("#edDownload").hidden = defaults;
+  $("#edReview").hidden = defaults;
+  $("#lkPipeline").hidden = !defaults;
+  $("#setReset").hidden = !defaults;
+  $("#lkDefault").hidden = defaults;
+  $("#paneLook").hidden = false;
+  $("#panePost").hidden = true;
+  document.querySelectorAll(".ed-tabs .tab").forEach(t => t.setAttribute("aria-selected", t.dataset.pane === "look"));
+  $("#edSave").textContent = defaults ? "Save settings" : "Save and re-render";
+}
+
+function openSettings() {
+  setMode("defaults");
+  state.current = null;
+  $("#edTitle").textContent = "Settings";
+  $("#edMeta").textContent = "Every new reel starts with these. You can still change any single reel from its own editor.";
+  // Preview on a real frame when a reel exists, otherwise on the plain dark canvas
+  const sample = state.drafts.find(x => x.restylable);
+  $("#preview").style.backgroundImage = sample ? `url(/media/${sample.status}/${encodeURIComponent(sample.name)}/clean.jpg)` : "none";
+  state.sample = "this is how it looks";
+  look.value = { ...look.opts.defaults };
+  $("#setLen").value = String(look.value.max_len);
+  $("#setDrafts").value = String(look.value.drafts);
+  $("#edSave").disabled = false;
+  $("#edSave").title = "";
+  $("#editor").showModal();
+  setLook({}, { show: false });
+  setView("preview");
+}
+$("#settingsBtn").addEventListener("click", openSettings);
+
+async function saveSettings() {
+  const body = { ...lookPayload(), max_len: Number($("#setLen").value), drafts: Number($("#setDrafts").value) };
+  const r = await api("/api/settings", { method: "POST", headers: { "Content-Type": "application/json" },
+                                         body: JSON.stringify(body) });
+  look.opts.defaults = { ...look.opts.defaults, ...r.defaults };
+  applyRailDefaults();
+  closeEditor();
+  toast("Settings saved. New reels will use them.");
+}
+
+$("#setReset").addEventListener("click", async () => {
+  if (!confirm("Reset every setting to the house defaults (1.1x speed, punchline zoom, bold gold captions, 1 min reels)?")) return;
+  try {
+    const r = await api("/api/settings/reset", { method: "POST" });
+    look.opts.defaults = r.defaults;
+    look.value = { ...r.defaults };
+    $("#setLen").value = String(look.value.max_len);
+    $("#setDrafts").value = String(look.value.drafts);
+    setLook({}, { show: false });
+    applyRailDefaults();
+    toast("Settings reset to the house defaults.");
+  } catch (e) { toast(e.message, true); }
+});
+
 /* ---------- editor */
 async function openEditor(d) {
+  setMode("reel");
   state.current = d;
   const base = `/media/${d.status}/${encodeURIComponent(d.name)}`;
   $("#edTitle").textContent = d.title;
@@ -684,6 +788,10 @@ async function move(d, action, label) {
 }
 
 $("#edSave").addEventListener("click", async () => {
+  if (state.mode === "defaults") {
+    try { await saveSettings(); } catch (e) { toast(e.message, true); }
+    return;
+  }
   const d = state.current;
   try {
     await api(`/api/drafts/${d.status}/${encodeURIComponent(d.name)}/edit`, {
@@ -813,6 +921,7 @@ Promise.all([loadDrafts(), loadOptions()]).then(() => {
   const m = location.hash.match(/^#open=(\w+)\/([^&]+)/);
   const d = m && state.drafts.find(x => x.status === m[1] && x.name === decodeURIComponent(m[2]));
   if (d) openEditor(d).then(() => location.hash.includes("&look") && setView("preview"));
+  if (location.hash === "#settings") openSettings();
 });
 loadInbox();
 pollJob();
