@@ -57,6 +57,19 @@ class TestLook(unittest.TestCase):
         self.assertEqual((look["caption_font"], look["caption_style"], look["watermark_align"]),
                          ("anton", "bold", "center"))
 
+    def test_playback_speed_is_clamped_and_defaulted(self):
+        self.assertEqual(sanitize({"playback_speed": "1.1"}), {"playback_speed": 1.1})
+        self.assertEqual(sanitize({"playback_speed": 9}), {"playback_speed": 1.5})
+        self.assertEqual(full_look({})["playback_speed"], 1.1)  # house default
+
+    def test_effects_settings(self):
+        self.assertEqual(sanitize({"punch_zoom": 0}), {"punch_zoom": False})
+        self.assertEqual(sanitize({"music_track": "../../.env"}), {})   # only files in assets/music
+        self.assertEqual(sanitize({"music_track": ""}), {"music_track": ""})
+        look = full_look({})
+        self.assertTrue(look["punch_zoom"])
+        self.assertEqual(look["music_track"], "")
+
 
 if __name__ == "__main__":
     unittest.main()

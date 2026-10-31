@@ -45,6 +45,24 @@ def slugify(text):
     return re.sub(r"[^a-z0-9]+", "_", text.lower()).strip("_")[:50] or "clip"
 
 
+def probe_fps(video_path):
+    """Frame rate as FFmpeg writes it (e.g. "24000/1001"); "30" if it can't be read."""
+    out = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+                          "stream=r_frame_rate", "-of", "csv=p=0", video_path], capture_output=True, text=True)
+    rate = out.stdout.strip().splitlines()[0] if out.stdout.strip() else ""
+    return rate if re.fullmatch(r"\d+(/\d+)?", rate) and not rate.endswith("/0") else "30"
+
+
+def music_path(track):
+    """Absolute path of a chosen bed in assets/music, or None (missing files are skipped, not fatal)."""
+    from framefluence.paths import MUSIC
+    path = os.path.join(MUSIC, track) if track else None
+    if path and not os.path.isfile(path):
+        log.warning("    Music track %s not found in assets/music; rendering without it", track)
+        return None
+    return path
+
+
 def probe_size(video_path):
     out = subprocess.run(
         ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height",
@@ -230,6 +248,8 @@ def finish_draft(work, clip, meta, words, framing, track_x, start, end, source, 
         subtitle_file = write_subtitles(words, os.path.join(work, "subtitles.ass"), style=style,
                                         hook=on_video_hook, hook_seconds=end - start, look=look)
         log.info("    Captions (%s, %s): %s", style, look["caption_font"], "generated" if subtitle_file else "none")
+    if look.get("playback_speed", 1.0) != 1.0:
+        log.info("    Playback speed %.2fx", look["playback_speed"])
     with open(os.path.join(work, "words.json"), "w", encoding="utf-8") as f:
         json.dump(words, f)
 
@@ -242,6 +262,10 @@ def finish_draft(work, clip, meta, words, framing, track_x, start, end, source, 
         subtitle_file=os.path.relpath(subtitle_file, ROOT) if subtitle_file else None,
         framing=framing, track_x=track_x,
         watermark=watermark, watermark_align=watermark_align, watermark_y=watermark_y,
+        speed=look.get("playback_speed", 1.0),
+        punch_zoom_at=(end - start - 2.0) if look.get("punch_zoom", True) and end - start > 6 else None,
+        fps=probe_fps(clip),
+        music_file=music_path(look.get("music_track")),
     )
     if not ok:
         raise RuntimeError("FFmpeg render failed")

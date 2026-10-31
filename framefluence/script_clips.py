@@ -212,7 +212,10 @@ def clip_meta(show, clip):
             if tag and tag not in speakers:
                 speakers.append(tag)
     show_tag = "#" + re.sub(r"[^a-z0-9]", "", show.lower())
+    from framefluence.look import load_defaults
+    # Start from the user's saved look (font, speed, watermark...) like autopilot drafts do
     return {
+        **load_defaults(),
         "title": f"{show} {code} - {clip['title']}",
         "header": f"{show.upper()} | {code}",
         "hook": re.sub(r"\s*\(.*?\)\s*$", "", clip["title"]),

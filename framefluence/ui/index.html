@@ -300,6 +300,14 @@
           <div class="group"><label class="label" for="lkCapPos">Caption position</label>
             <div class="slider"><span>Higher</span><input type="range" id="lkCapPos" min="10" max="95" step="1"><span>Lower</span></div>
             <p class="warn" id="lkCapWarn" hidden>Instagram's buttons and caption may cover text this low.</p></div>
+          <div class="group"><span class="label">Playback speed</span>
+            <div class="seg" id="lkSpeeds" role="group" aria-label="Playback speed"></div>
+            <p class="hint">Voices keep their natural pitch. Speed changes pacing only; it doesn't affect copyright matching.</p></div>
+          <div class="group"><span class="label">Effects</span>
+            <label class="check"><input type="checkbox" id="lkZoom"> Slow zoom-in on the punchline (last 2 seconds)</label></div>
+          <div class="group"><label class="label" for="lkMusic">Background music</label>
+            <div class="field" style="margin:0"><select id="lkMusic"></select></div>
+            <p class="hint" id="lkMusicHint"></p></div>
           <div class="group"><span class="label">Watermark</span>
             <label class="check"><input type="checkbox" id="lkWmShow"> Show @framefluence on the video</label>
             <div class="wm-row">
@@ -478,6 +486,24 @@ async function loadOptions() {
     b.addEventListener("click", () => setLook({ caption_style: s.id }));
     $("#lkStyles").appendChild(b);
   }
+  $("#lkSpeeds").innerHTML = "";
+  for (const sp of look.opts.speeds) {
+    const b = document.createElement("button");
+    b.type = "button"; b.dataset.speed = String(sp);
+    b.textContent = sp === 1 ? "Normal" : `${sp}x`;
+    b.addEventListener("click", () => setLook({ playback_speed: sp }, { show: false }));
+    $("#lkSpeeds").appendChild(b);
+  }
+  const music = $("#lkMusic");
+  music.innerHTML = "";
+  for (const [value, label] of [["", "None"], ...look.opts.music.map(m => [m, m])]) {
+    const o = document.createElement("option");
+    o.value = value; o.textContent = label;
+    music.appendChild(o);
+  }
+  $("#lkMusicHint").textContent = look.opts.music.length
+    ? "Mixed quietly under the dialogue and lowered whenever someone speaks. Only use tracks you have the rights to."
+    : "Add licensed or royalty-free tracks to assets/music to choose one here.";
   $("#lkColors").innerHTML = "";
   for (const c of look.opts.colors) {
     const b = document.createElement("button");
@@ -493,6 +519,8 @@ document.querySelectorAll("#lkWmAlign button").forEach(b => b.addEventListener("
 $("#lkCapPos").addEventListener("input", e => setLook({ caption_position: e.target.value / 100 }));
 $("#lkWmPos").addEventListener("input", e => setLook({ watermark_position: e.target.value / 100 }));
 $("#lkWmShow").addEventListener("change", e => setLook({ show_watermark: e.target.checked }));
+$("#lkZoom").addEventListener("change", e => setLook({ punch_zoom: e.target.checked }, { show: false }));
+$("#lkMusic").addEventListener("change", e => setLook({ music_track: e.target.value }, { show: false }));
 
 function setLook(change, { show = true } = {}) {
   Object.assign(look.value, change);
@@ -503,9 +531,12 @@ function setLook(change, { show = true } = {}) {
   press("#lkColors button", "color", v.caption_color);
   press("#lkSizes button", "size", v.caption_size);
   press("#lkWmAlign button", "align", v.watermark_align);
+  press("#lkSpeeds button", "speed", String(Number(v.playback_speed || 1)));
   $("#lkCapPos").value = Math.round(v.caption_position * 100);
   $("#lkWmPos").value = Math.round(v.watermark_position * 100);
   $("#lkWmShow").checked = !!v.show_watermark;
+  $("#lkZoom").checked = v.punch_zoom !== false;
+  $("#lkMusic").value = v.music_track || "";
   $("#lkCapWarn").hidden = v.caption_position <= 0.82;
   document.querySelectorAll("#lkWmAlign button, #lkWmPos").forEach(el => (el.disabled = !v.show_watermark));
   renderPreview();
@@ -564,7 +595,9 @@ function lookPayload() {
   const v = look.value;
   return { caption_style: v.caption_style, caption_font: v.caption_font, caption_color: v.caption_color,
            caption_size: v.caption_size, caption_position: v.caption_position, show_watermark: v.show_watermark,
-           watermark_align: v.watermark_align, watermark_position: v.watermark_position };
+           watermark_align: v.watermark_align, watermark_position: v.watermark_position,
+           playback_speed: Number(v.playback_speed || 1), punch_zoom: v.punch_zoom !== false,
+           music_track: v.music_track || "" };
 }
 
 $("#lkDefault").addEventListener("click", async () => {

@@ -9,6 +9,7 @@ DATA = os.path.join(ROOT, "data")
 ASSETS = os.path.join(ROOT, "assets")
 FONTS = os.path.join(ASSETS, "fonts")
 FOOTAGE = os.path.join(ASSETS, "footage")
+MUSIC = os.path.join(ASSETS, "music")  # licensed / royalty-free beds (git-ignored)
 MODELS = os.path.join(ROOT, "models")
 UI = os.path.join(PACKAGE, "ui")
 

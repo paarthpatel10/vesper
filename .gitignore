@@ -18,6 +18,7 @@ cache/
 
 # --- Footage and renders: never commit copyrighted video
 assets/footage/
+assets/music/
 *.mp4
 *.mkv
 *.mov

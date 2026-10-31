@@ -9,11 +9,23 @@ import json
 import os
 
 from framefluence.auto_subtitles import COLORS, DEFAULT_LOOK, FONTS, SIZES, STYLES, resolve_look
-from framefluence.paths import SETTINGS
+from framefluence.paths import MUSIC, SETTINGS
 
 WATERMARK_ALIGNS = ("left", "center", "right")
 DEFAULT_WATERMARK = {"show_watermark": True, "watermark_align": "center", "watermark_position": 0.05}
-LOOK_KEYS = tuple(DEFAULT_LOOK) + tuple(DEFAULT_WATERMARK)
+# Playback speed: pacing only (pitch is preserved); it does not stop Content ID matching
+SPEEDS = (1.0, 1.05, 1.1, 1.15, 1.2, 1.25)
+# House defaults for every new reel: 10% faster pacing and the punchline push-in
+DEFAULT_PLAYBACK = {"playback_speed": 1.1, "punch_zoom": True, "music_track": ""}
+MUSIC_EXTS = (".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac")
+
+
+def music_tracks():
+    """Files the user has put in assets/music (only these can be chosen as a bed)."""
+    if not os.path.isdir(MUSIC):
+        return []
+    return sorted(f for f in os.listdir(MUSIC) if f.lower().endswith(MUSIC_EXTS))
+LOOK_KEYS = tuple(DEFAULT_LOOK) + tuple(DEFAULT_WATERMARK) + tuple(DEFAULT_PLAYBACK)
 
 
 def _fraction(value, low, high):
@@ -31,7 +43,12 @@ def sanitize(fields):
         clean["watermark_align"] = fields["watermark_align"]
     if "show_watermark" in fields:
         clean["show_watermark"] = bool(fields["show_watermark"])
-    for key, low, high in (("caption_position", 0.1, 0.95), ("watermark_position", 0.0, 0.97)):
+    if "punch_zoom" in fields:
+        clean["punch_zoom"] = bool(fields["punch_zoom"])
+    if "music_track" in fields and (fields["music_track"] in music_tracks() or fields["music_track"] in ("", None)):
+        clean["music_track"] = fields["music_track"] or ""
+    for key, low, high in (("caption_position", 0.1, 0.95), ("watermark_position", 0.0, 0.97),
+                           ("playback_speed", 0.75, 1.5)):
         try:
             if key in fields:
                 clean[key] = round(_fraction(fields[key], low, high), 3)
@@ -57,7 +74,7 @@ def resolve_watermark(meta):
 def full_look(meta):
     """Every look key with defaults filled in: what the Studio shows and the render uses."""
     look = resolve_look(meta)
-    for key, value in DEFAULT_WATERMARK.items():
+    for key, value in {**DEFAULT_WATERMARK, **DEFAULT_PLAYBACK}.items():
         look[key] = meta.get(key, value)
     return {**look, **sanitize(meta)}
 
@@ -87,5 +104,7 @@ def options():
                     "outline": v["outline"], "highlight": v["highlight"]} for k, v in STYLES.items()],
         "colors": [{"id": k, "label": v["label"], "hex": v["hex"]} for k, v in COLORS.items()],
         "sizes": SIZES,
-        "defaults": {**DEFAULT_LOOK, **DEFAULT_WATERMARK, **load_defaults()},
+        "speeds": SPEEDS,
+        "music": music_tracks(),
+        "defaults": {**DEFAULT_LOOK, **DEFAULT_WATERMARK, **DEFAULT_PLAYBACK, **load_defaults()},
     }
